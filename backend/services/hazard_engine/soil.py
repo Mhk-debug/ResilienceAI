@@ -5,158 +5,238 @@ hazard_engine/soil.py
 """
 
 import urllib.request
-
 import urllib.parse
-
 import json
-
 import logging
-
 from typing import Dict, Any
-
+from owslib.wcs import WebCoverageService
+import tempfile
+import rasterio
 
 
 logger = logging.getLogger(__name__)
 
 
+properties_names = ["clay", "sand", "silt", "bdod", "cfvo", "soc"]
+delta = 0.05
+value = 'mean'
+depth = '0-5cm'
+
+properties = [f"{p}_{depth}_{value}" for p in properties_names]
 
 def fetch_soilgrids_data(lat: float, lon: float) -> Dict[str, Any]:
+    try:
+        rasters = _download_all_layers(lat, lon)
+        values = _sample_all_layers(rasters, lat, lon)
 
-    url = "https://rest.isric.org/soilgrids/v2.0/properties/query"
+        return _convert_to_features(values)
 
-    properties = ["clay", "sand", "silt", "bdod", "cfvo", "ocd"]
+    except Exception as e:
+        logger.warning(f"WCS soil fetch failed: {e}")
+        return get_fallback_soil_properties(lat, lon)
 
+
+def _download_all_layers(lat: float, lon: float) -> Dict[str, str]:
+    
     params = {
-
+        "crs": 'urn:ogc:def:crs:EPSG::4326',
+        "format": 'GEOTIFF_INT16',
+        "resx":0.01,
+        "resy":0.01,
         "lon": lon,
-
         "lat": lat,
-
-        "property": properties,
-
-        "value": "mean"
-
+        "bbox": (lon-delta, lat-delta, lon+delta, lat+delta),
     }
 
-   
+    files = {}
 
-    try:
+    for i, p in enumerate(properties_names):
+        try:
+            url = f"http://maps.isric.org/mapserv?map=/map/{p}.map"
+            wcs = WebCoverageService(url, version='1.0.0')
+            response = wcs.getCoverage(
+                identifier = properties[i],
+                bbox = params["bbox"],
+                resx = params["resx"],
+                resy = params["resy"],
+                format = params["format"]
+            )
 
-        query_string = urllib.parse.urlencode(params, doseq=True)
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".tif")
+            tmp.write(response.read())
+            tmp.close()
+            files[p] = tmp.name
 
-        full_url = f"{url}?{query_string}"
+        except Exception as e:
+            logger.warning(f"Failed to fetch SoilGrids API: {str(e)}")
 
-       
-
-        req = urllib.request.Request(full_url, headers={"User-Agent": "EarthquakeHazardEngine/1.0"})
-
-        with urllib.request.urlopen(req, timeout=5.0) as response:
-
-            if response.status == 200:
-
-                body = response.read().decode("utf-8")
-
-                data = json.loads(body)
-
-                return parse_soilgrids_json(data)
-
-            else:
-
-                logger.warning(f"SoilGrids API returned status code {response.status}")
-
-    except Exception as e:
-
-        logger.warning(f"Failed to fetch SoilGrids API: {str(e)}")
-
-       
-
-    return get_fallback_soil_properties(lat, lon)
+    return files
 
 
+def _sample_all_layers(files: Dict[str, str], lat: float, lon: float) -> Dict[str, float]:
+    results = {}
 
-def parse_soilgrids_json(data: Dict[str, Any]) -> Dict[str, Any]:
+    for key, path in files.items():
+        try:
+            with rasterio.open(path) as src:
+                val = next(src.sample([(lon, lat)]))[0]
 
-    raw_properties = {}
+                if val is None:
+                    continue
 
-    try:
+                results[key] = float(val)
 
-        layers = data.get("properties", {}).get("layers", [])
+        except Exception as e:
+            logger.warning(f"Sampling failed for {key}: {e}")
 
-        for layer in layers:
-
-            name = layer.get("name")
-
-            depths = layer.get("depths", [])
-
-            values = []
-
-            for d in depths:
-
-                label = d.get("label", "")
-
-                if label in ["0-5cm", "5-15cm", "15-30cm"]:
-
-                    mean_val = d.get("values", {}).get("mean")
-
-                    if mean_val is not None:
-
-                        values.append(mean_val)
-
-            if values:
-
-                avg_val = sum(values) / len(values)
-
-                raw_properties[name] = avg_val
-
-    except Exception as e:
-
-        logger.error(f"Error parsing SoilGrids JSON: {str(e)}")
+    return results
 
 
+def _convert_to_features(v: Dict[str, float]) -> Dict[str, Any]:
 
-    sand_pct = raw_properties.get("sand", 400.0) / 10.0
+    sand = v.get("sand", 400) / 10.0
+    clay = v.get("clay", 250) / 10.0
+    silt = v.get("silt", 350) / 10.0
 
-    clay_pct = raw_properties.get("clay", 250.0) / 10.0
+    bdod = v.get("bdod", 1300) / 1000.0
+    cfvo = v.get("cfvo", 100) / 10.0
+    soc = v.get("soc", 150) / 1000.0
 
-    silt_pct = raw_properties.get("silt", 350.0) / 10.0
-
-    bulk_density = raw_properties.get("bdod", 1350.0) / 1000.0
-
-    coarse_frags = raw_properties.get("cfvo", 100.0) / 10.0
-
-    org_carbon = raw_properties.get("ocd", 150.0) / 1000.0
-
-   
-
-    total_frac = sand_pct + clay_pct + silt_pct
-
-    if total_frac > 0:
-
-        sand_pct = (sand_pct / total_frac) * 100.0
-
-        clay_pct = (clay_pct / total_frac) * 100.0
-
-        silt_pct = (silt_pct / total_frac) * 100.0
-
-
+    # normalize texture
+    total = sand + clay + silt
+    if total > 0:
+        sand = sand / total * 100
+        clay = clay / total * 100
+        silt = silt / total * 100
 
     return {
+        "sand_pct": sand,
+        "clay_pct": clay,
+        "silt_pct": silt,
 
-        "sand_pct": sand_pct,
-
-        "clay_pct": clay_pct,
-
-        "silt_pct": silt_pct,
-
-        "bulk_density": bulk_density,
-
-        "coarse_fragments_pct": coarse_frags,
-
-        "organic_carbon_pct": org_carbon,
+        "bulk_density": bdod,
+        "coarse_fragments_pct": cfvo,
+        "organic_carbon_pct": soc,
 
         "source": "SoilGrids API"
-
     }
+
+
+# def fetch_soilgrids_data(lat: float, lon: float) -> Dict[str, Any]:
+    # try:
+
+    #     query_string = urllib.parse.urlencode(params, doseq=True)
+    #     full_url = f"{url}?{query_string}"
+
+    #     req = urllib.request.Request(full_url, headers={"User-Agent": "EarthquakeHazardEngine/1.0"})
+
+    #     with urllib.request.urlopen(req, timeout=5.0) as response:
+
+    #         if response.status == 200:
+
+    #             body = response.read().decode("utf-8")
+
+    #             data = json.loads(body)
+
+    #             return parse_soilgrids_json(data)
+
+    #         else:
+
+    #             logger.warning(f"SoilGrids API returned status code {response.status}")
+
+    # except Exception as e:
+
+    #     logger.warning(f"Failed to fetch SoilGrids API: {str(e)}")
+
+       
+
+    # return get_fallback_soil_properties(lat, lon)
+
+
+
+# def parse_soilgrids_json(data: Dict[str, Any]) -> Dict[str, Any]:
+
+#     raw_properties = {}
+
+#     try:
+
+#         layers = data.get("properties", {}).get("layers", [])
+
+#         for layer in layers:
+
+#             name = layer.get("name")
+
+#             depths = layer.get("depths", [])
+
+#             values = []
+
+#             for d in depths:
+
+#                 label = d.get("label", "")
+
+#                 if label in ["0-5cm", "5-15cm", "15-30cm"]:
+
+#                     mean_val = d.get("values", {}).get("mean")
+
+#                     if mean_val is not None:
+
+#                         values.append(mean_val)
+
+#             if values:
+
+#                 avg_val = sum(values) / len(values)
+
+#                 raw_properties[name] = avg_val
+
+#     except Exception as e:
+
+#         logger.error(f"Error parsing SoilGrids JSON: {str(e)}")
+
+
+
+#     sand_pct = raw_properties.get("sand", 400.0) / 10.0
+
+#     clay_pct = raw_properties.get("clay", 250.0) / 10.0
+
+#     silt_pct = raw_properties.get("silt", 350.0) / 10.0
+
+#     bulk_density = raw_properties.get("bdod", 1350.0) / 1000.0
+
+#     coarse_frags = raw_properties.get("cfvo", 100.0) / 10.0
+
+#     org_carbon = raw_properties.get("ocd", 150.0) / 1000.0
+
+   
+
+#     total_frac = sand_pct + clay_pct + silt_pct
+
+#     if total_frac > 0:
+
+#         sand_pct = (sand_pct / total_frac) * 100.0
+
+#         clay_pct = (clay_pct / total_frac) * 100.0
+
+#         silt_pct = (silt_pct / total_frac) * 100.0
+
+
+
+#     return {
+
+#         "sand_pct": sand_pct,
+
+#         "clay_pct": clay_pct,
+
+#         "silt_pct": silt_pct,
+
+#         "bulk_density": bulk_density,
+
+#         "coarse_fragments_pct": coarse_frags,
+
+#         "organic_carbon_pct": org_carbon,
+
+#         "source": "SoilGrids API"
+
+#     }
 
 
 
