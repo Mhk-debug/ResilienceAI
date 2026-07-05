@@ -9,7 +9,12 @@ from google import genai
 from google.genai import types
 import certifi
 
-from schema import (
+import sys
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
+from llm_schema import (
     BuildingLLMContext,
     EnvironmentalContext,
     LLMAnalysisInput,
@@ -23,6 +28,12 @@ from schema import (
 os.environ["SSL_CERT_FILE"] = certifi.where()
 load_dotenv()
 
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+print(os.getenv("GEMINI_API_KEY"))
 
 # =========================================================
 # UTIL: SAFE JSON PARSER
