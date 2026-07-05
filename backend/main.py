@@ -5,10 +5,6 @@ import json
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 
-import sys
-from pathlib import Path
-sys.path.append(str(Path(__file__).resolve().parents[1]))
-
 from project_schema import BuildingInput, HazardInput, HazardReport, LLMAnalysisInput, ResilienceAssessmentResponse, BuildingLLMContext
 from services import process_and_align_inference_data, calculate_resilience_score, calculate_hazard_pydantic
 from richtor_mappings import decode_building_feature

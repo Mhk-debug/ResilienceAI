@@ -4,10 +4,6 @@ hazard_engine/engine.py
 import time
 from typing import Dict, Any, List
 
-import sys
-from pathlib import Path
-sys.path.append(str(Path(__file__).resolve().parents[1]))
-
 from project_schema import HazardInput, HazardReport
 from .usgs import query_usgs_catalog
 from .shakemap import integrate_shakemap_data
