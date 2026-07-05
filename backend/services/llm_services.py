@@ -9,11 +9,6 @@ from google import genai
 from google.genai import types
 import certifi
 
-import sys
-from pathlib import Path
-
-sys.path.append(str(Path(__file__).resolve().parents[1]))
-
 from project_schema import (
     BuildingLLMContext,
     EnvironmentalContext,
