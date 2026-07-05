@@ -114,7 +114,6 @@ class LLMSoilContext(BaseModel):
 
 
 class LLMGroundMotionContext(BaseModel):
-    estimated_intensity: str
     estimated_mmi: float
     estimated_pga_g: float
     confidence: float

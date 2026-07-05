@@ -170,9 +170,11 @@ class LLMService:
         return f"""
 You are a seismic risk engineering AI assistant.
 
-Analyze structural vulnerability and environmental seismic hazard.
+Your task is to analyze building structural vulnerability and environmental seismic hazard,
+then return a structured JSON response.
 
-Return ONLY valid JSON.
+You MUST follow the output format exactly and return ONLY valid JSON.
+Do not include any explanations outside the JSON.
 
 -----------------------------
 BUILDING CONTEXT:
@@ -184,24 +186,63 @@ ENVIRONMENTAL CONTEXT:
 
 -----------------------------
 
-OUTPUT FORMAT:
+OUTPUT REQUIREMENTS:
+- "summary" must be a list of short bullet-point strings explaining key findings.
+- "recommendations" must contain AT LEAST 4 actionable engineering or safety recommendations.
+- Each recommendation must include:
+  - priority: "red" | "orange" | "yellow" | "green"
+  - title: short label
+  - description: detailed actionable guidance
+- "risk_interpretation" must provide structured reasoning for:
+  - structural assessment
+  - environmental assessment
+  - overall reasoning
+- "confidence" must be a float between 0 and 1 representing certainty.
+
+-----------------------------
+OUTPUT FORMAT (STRICT JSON):
 
 {{
-  "summary": [],
+  "summary": [
+    "string",
+    "string",
+    "string"
+  ],
   "recommendations": [
     {{
       "priority": "red",
-      "title": "",
-      "description": ""
+      "title": "string",
+      "description": "string"
+    }},
+    {{
+      "priority": "orange",
+      "title": "string",
+      "description": "string"
+    }},
+    {{
+      "priority": "yellow",
+      "title": "string",
+      "description": "string"
+    }},
+    {{
+      "priority": "green",
+      "title": "string",
+      "description": "string"
     }}
   ],
   "risk_interpretation": {{
-    "structural_assessment": "",
-    "environmental_assessment": "",
-    "overall_reasoning": ""
+    "structural_assessment": "string",
+    "environmental_assessment": "string",
+    "overall_reasoning": "string"
   }},
   "confidence": 0.0
 }}
+
+STRICT RULES:
+- Output ONLY valid JSON (no markdown, no commentary)
+- Always include at least 4 recommendations
+- Keep summaries concise and engineering-focused
+- Ensure consistency between risk interpretation and recommendations
 """
 
 

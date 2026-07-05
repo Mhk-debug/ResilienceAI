@@ -129,7 +129,8 @@ def calculate_hazard(
             "dominant_soil": soil_risk["soil_class"]
         },
         "ground_motion": {
-            "estimated_intensity": shakemap_data["peak_mmi"],
+            "estimated_mmi": shakemap_data["peak_mmi"],
+            "estimated_pga_g": shakemap_data["peak_pga"],
             "confidence": confidence
         },
         "summary": summary_sentences

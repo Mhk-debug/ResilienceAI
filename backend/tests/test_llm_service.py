@@ -51,7 +51,6 @@ if __name__ == "__main__":
             dominant_soil="Soft clay prone to amplification and liquefaction"
         ),
         ground_motion=LLMGroundMotionContext(
-            estimated_intensity="Severe",
             estimated_mmi=8.0,
             estimated_pga_g=0.48,
             confidence=0.85
