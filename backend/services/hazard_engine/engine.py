@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from llm_schema import HazardInput, HazardReport
+from project_schema import HazardInput, HazardReport
 from .usgs import query_usgs_catalog
 from .shakemap import integrate_shakemap_data
 from .soil import fetch_soilgrids_data, evaluate_liquefaction_risk

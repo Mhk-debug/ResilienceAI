@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from llm_schema import (
+from project_schema import (
     BuildingLLMContext,
     EnvironmentalContext,
     LLMAnalysisInput,
@@ -28,12 +28,6 @@ from llm_schema import (
 os.environ["SSL_CERT_FILE"] = certifi.where()
 load_dotenv()
 
-from dotenv import load_dotenv
-import os
-
-load_dotenv()
-
-print(os.getenv("GEMINI_API_KEY"))
 
 # =========================================================
 # UTIL: SAFE JSON PARSER
