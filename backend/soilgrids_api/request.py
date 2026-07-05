@@ -1,5 +1,10 @@
+import tempfile
+from typing import Any, Dict
+import logging
 from owslib.wcs import WebCoverageService
+import rasterio
 
+logger = logging.getLogger(__name__)
 
 wcs = WebCoverageService('http://maps.isric.org/mapserv?map=/map/soc.map', version='1.0.0') # request for soil carbon
 
@@ -12,23 +17,72 @@ wcs = WebCoverageService('http://maps.isric.org/mapserv?map=/map/soc.map', versi
 # print([op.name for op in wcs.operations]) # returns the available operation that can be done on this request
 # print(list(wcs.contents)) # returns the name of the coverages available. ex. soc_0-5cm_mean
 
-name = "soc_0-5cm_mean"
+# name = "soc_0-5cm_mean"
 
 # a = wcs.contents[name] # returns the coverage object corresponding to the name
 # print("crs --", a.supportedCRS, "\n") # returns the supported coordinate reference system.
-# Use the epsg 4326 as we only have to enter the lattitude and longitude.
+# # Use the epsg 4326 as we only have to enter the lattitude and longitude.
 
 # print("formats --", a.supportedFormats, "\n") # returns supported format
 # print("box --", a.boundingboxes) # returns the full area of bbox available
 
+def _sample_all_layers(files: Dict[str, str], lat: float, lon: float) -> Dict[str, float]:
+    results = {}
+
+    for key, path in files.items():
+        try:
+            with rasterio.open(path) as src:
+                val = next(src.sample([(lon, lat)]))[0]
+
+                if val is None:
+                    continue
+
+                results[key] = float(val)
+
+        except Exception as e:
+            logger.warning(f"Sampling failed for {key}: {e}")
+
+    return results
+
+
+def _convert_to_features(v: Dict[str, float]) -> Dict[str, Any]:
+
+    sand = v.get("sand", 400) / 10.0
+    clay = v.get("clay", 250) / 10.0
+    silt = v.get("silt", 350) / 10.0
+
+    bdod = v.get("bdod", 1300) / 1000.0
+    cfvo = v.get("cfvo", 100) / 10.0
+    soc = v.get("soc", 150) / 1000.0
+
+    # normalize texture
+    total = sand + clay + silt
+    if total > 0:
+        sand = sand / total * 100
+        clay = clay / total * 100
+        silt = silt / total * 100
+
+    return {
+        "sand_pct": sand,
+        "clay_pct": clay,
+        "silt_pct": silt,
+
+        "bulk_density": bdod,
+        "coarse_fragments_pct": cfvo,
+        "organic_carbon_pct": soc,
+
+        "source": "SoilGrids API"
+    }
+
+
+
 # EXAMPLE
 response = wcs.getCoverage(
-    identifier= name,
+    identifier= "soc_0-5cm_mean",
     crs= 'urn:ogc:def:crs:EPSG::4326',
     bbox= (95.90, 16.60, 96.40, 17.20), #bbox of yangon using lati- and longi-
     resx=0.01, resy=0.01, # the lower it is the higher the detail but may overload the file
     format= 'GEOTIFF_INT16'
 )
 
-with open("Yangon_soc_0-5_mean.tif", 'wb') as file:
-    file.write(response.read())
+
