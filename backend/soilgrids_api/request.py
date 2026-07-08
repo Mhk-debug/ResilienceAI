@@ -26,63 +26,62 @@ wcs = WebCoverageService('http://maps.isric.org/mapserv?map=/map/soc.map', versi
 # print("formats --", a.supportedFormats, "\n") # returns supported format
 # print("box --", a.boundingboxes) # returns the full area of bbox available
 
-def _sample_all_layers(files: Dict[str, str], lat: float, lon: float) -> Dict[str, float]:
-    results = {}
+# EXAMPLE
+# response = wcs.getCoverage(
+#     identifier= "soc_0-5cm_mean",
+#     crs= 'urn:ogc:def:crs:EPSG::4326',
+#     bbox= (95.90, 16.60, 96.40, 17.20), #bbox of yangon using lati- and longi-
+#     resx=0.01, resy=0.01, # the lower it is the higher the detail but may overload the file
+#     format= 'GEOTIFF_INT16'
+# )
 
-    for key, path in files.items():
+properties_names = ["clay", "sand", "silt", "bdod", "cfvo", "soc"]
+value = 'mean'
+depth = '0-5cm'
+delta = 0.05
+properties = [f"{p}_{depth}_{value}" for p in properties_names]
+
+CITIES = [
+    { "name": "Singapore", "lat": 1.3521, "lon": 103.8198, "expected": "10–25 (Very Low)" },
+    { "name": "Bangkok", "lat": 13.7563, "lon": 100.5018, "expected": "20–40 (Low–Moderate)" },
+    { "name": "Yangon", "lat": 16.8661, "lon": 96.1951, "expected": "45–60 (Moderate–High boundary)" },
+    { "name": "Mandalay", "lat": 21.9588, "lon": 96.0891, "expected": "55–70 (High end of moderate/high)" },
+    { "name": "Tokyo", "lat": 35.6762, "lon": 139.6503, "expected": "80–95 (Very High)" },
+    { "name": "San Francisco", "lat": 37.7749, "lon": -122.4194, "expected": "]75–90 (Very High)" }]
+
+for x in range(len(CITIES)):
+    print(CITIES[x]["name"])
+    for i in range(len(properties)):
+        wcs = WebCoverageService(f"http://maps.isric.org/mapserv?map=/map/{properties_names[i]}.map", version='1.0.0')
+
+        response = wcs.getCoverage(
+            identifier= properties[i],
+            crs= 'urn:ogc:def:crs:EPSG::4326',
+            bbox= (CITIES[x]["lon"]-delta, CITIES[x]["lat"]-delta, CITIES[x]["lon"]+delta, CITIES[x]["lat"]+delta), #bbox of yangon using lati- and longi-
+            resx=0.01, resy=0.01, # the lower it is the higher the detail but may overload the file
+            format= 'GEOTIFF_INT16'
+        )
+
+        with open("map.tif", "wb") as f:
+            f.write(response.read())
+
+        results = {}
+
+
         try:
-            with rasterio.open(path) as src:
-                val = next(src.sample([(lon, lat)]))[0]
+            with rasterio.open("map.tif") as src:
+                val = next(src.sample([(CITIES[x]["lon"], CITIES[x]["lat"])]))[0]
 
-                if val is None:
+                if val == src.nodata:
+                    print("No data at this location.")
                     continue
 
-                results[key] = float(val)
+                results[properties_names[i]] = float(val)
 
         except Exception as e:
-            logger.warning(f"Sampling failed for {key}: {e}")
+            logger.warning(f"Sampling failed for {properties_names[i]}: {e}")
 
-    return results
+        print(results)
 
-
-def _convert_to_features(v: Dict[str, float]) -> Dict[str, Any]:
-
-    sand = v.get("sand", 400) / 10.0
-    clay = v.get("clay", 250) / 10.0
-    silt = v.get("silt", 350) / 10.0
-
-    bdod = v.get("bdod", 1300) / 1000.0
-    cfvo = v.get("cfvo", 100) / 10.0
-    soc = v.get("soc", 150) / 1000.0
-
-    # normalize texture
-    total = sand + clay + silt
-    if total > 0:
-        sand = sand / total * 100
-        clay = clay / total * 100
-        silt = silt / total * 100
-
-    return {
-        "sand_pct": sand,
-        "clay_pct": clay,
-        "silt_pct": silt,
-
-        "bulk_density": bdod,
-        "coarse_fragments_pct": cfvo,
-        "organic_carbon_pct": soc,
-
-        "source": "SoilGrids API"
-    }
-
-
-
-# EXAMPLE
-response = wcs.getCoverage(
-    identifier= "soc_0-5cm_mean",
-    crs= 'urn:ogc:def:crs:EPSG::4326',
-    bbox= (95.90, 16.60, 96.40, 17.20), #bbox of yangon using lati- and longi-
-    resx=0.01, resy=0.01, # the lower it is the higher the detail but may overload the file
-    format= 'GEOTIFF_INT16'
-)
 
 
