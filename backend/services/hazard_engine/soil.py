@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 properties_names = ["clay", "sand", "silt", "bdod", "cfvo", "soc"]
-delta = 0.05
+delta = 0.5
 value = 'mean'
 depth = '0-5cm'
 
@@ -43,19 +43,18 @@ def _download_all_layers(lat: float, lon: float) -> Dict[str, str]:
         "format": 'GEOTIFF_INT16',
         "resx":0.01,
         "resy":0.01,
-        "lon": lon,
-        "lat": lat,
         "bbox": (lon-delta, lat-delta, lon+delta, lat+delta),
     }
 
     files = {}
 
-    for i, p in enumerate(properties_names):
+    for i in range(len(properties)):
         try:
-            url = f"http://maps.isric.org/mapserv?map=/map/{p}.map"
+            url = f"http://maps.isric.org/mapserv?map=/map/{properties_names[i]}.map"
             wcs = WebCoverageService(url, version='1.0.0')
             response = wcs.getCoverage(
                 identifier = properties[i],
+                crs = params["crs"],
                 bbox = params["bbox"],
                 resx = params["resx"],
                 resy = params["resy"],
@@ -65,7 +64,7 @@ def _download_all_layers(lat: float, lon: float) -> Dict[str, str]:
             tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".tif")
             tmp.write(response.read())
             tmp.close()
-            files[p] = tmp.name
+            files[properties[i]] = tmp.name
 
         except Exception as e:
             logger.warning(f"Failed to fetch SoilGrids API: {str(e)}")
@@ -81,7 +80,8 @@ def _sample_all_layers(files: Dict[str, str], lat: float, lon: float) -> Dict[st
             with rasterio.open(path) as src:
                 val = next(src.sample([(lon, lat)]))[0]
 
-                if val is None:
+                if val == src.nodata:
+                    print("No data at this location.")
                     continue
 
                 results[key] = float(val)
