@@ -18,7 +18,7 @@ from .calibration import (
 )
 from .statistics import compute_catalog_statistics
 
-def calculate_hazard(
+async def calculate_hazard(
     latitude: float,
     longitude: float,
     search_radius_km: float = 100.0,
@@ -41,7 +41,7 @@ def calculate_hazard(
     warnings.extend(usgs_warnings)
     api_status["USGS_Catalog"] = usgs_status["status"]
     
-    soil_props = fetch_soilgrids_data(latitude, longitude)
+    soil_props = await fetch_soilgrids_data(latitude, longitude)
     api_status["SoilGrids"] = "success" if "API" in soil_props["source"] else "fallback"
     if "Fallback" in soil_props["source"]:
         warnings.append(f"SoilGrids API query failed or timed out. {soil_props['source']} utilized.")
@@ -71,7 +71,6 @@ def calculate_hazard(
     )
     
     hist_level, hist_color = get_indicator_colors(event_score, 28.0)
-    fault_level, fault_color = get_indicator_colors(fault_score, 20.0)
     soil_level, soil_color = get_indicator_colors(soil_score, 12.0)
     
     zone_score = event_score * 0.6 + fault_score * 0.4
@@ -161,14 +160,14 @@ def calculate_hazard(
         }
     }
 
-def calculate_hazard_pydantic(inputs: HazardInput) -> HazardReport:
+async def calculate_hazard_pydantic(inputs: HazardInput) -> HazardReport:
     # Ensure optional numeric inputs from the Pydantic model are coerced to
     # concrete float values expected by calculate_hazard.
     search_radius = inputs.search_radius_km if inputs.search_radius_km is not None else 100.0
     historical_years = inputs.historical_years if inputs.historical_years is not None else 50.0
     minimum_magnitude = inputs.minimum_magnitude if inputs.minimum_magnitude is not None else 4.5
 
-    report_dict = calculate_hazard(
+    report_dict = await calculate_hazard(
         latitude=inputs.latitude,
         longitude=inputs.longitude,
         search_radius_km=search_radius,

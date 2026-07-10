@@ -4,12 +4,6 @@ hazard_engine/soil.py
 
 """
 
-import urllib.request
-
-import urllib.parse
-
-import json
-
 import logging
 
 from typing import Dict, Any
@@ -20,56 +14,51 @@ logger = logging.getLogger(__name__)
 
 
 
-def fetch_soilgrids_data(lat: float, lon: float) -> Dict[str, Any]:
+import httpx
+import logging
+from typing import Dict, Any
 
+logger = logging.getLogger(__name__)
+
+async def fetch_soilgrids_data(lat: float, lon: float) -> Dict[str, Any]:
     url = "https://rest.isric.org/soilgrids/v2.0/properties/query"
-
     properties = ["clay", "sand", "silt", "bdod", "cfvo", "ocd"]
-
+    
     params = {
-
         "lon": lon,
-
         "lat": lat,
-
         "property": properties,
-
         "value": "mean"
-
     }
-
-   
+    
+    # Configure an HTTP transport layer that automatically retries dropped connections
+    transport = httpx.AsyncHTTPTransport(retries=3)
+    
+    # Extended timeout configuration:
+    # 5.0s to connect, 15.0s to wait for SoilGrids to finish its heavy database read
+    timeout = httpx.Timeout(timeout=15.0, connect=5.0)
 
     try:
-
-        query_string = urllib.parse.urlencode(params, doseq=True)
-
-        full_url = f"{url}?{query_string}"
-
-       
-
-        req = urllib.request.Request(full_url, headers={"User-Agent": "EarthquakeHazardEngine/1.0"})
-
-        with urllib.request.urlopen(req, timeout=5.0) as response:
-
-            if response.status == 200:
-
-                body = response.read().decode("utf-8")
-
-                data = json.loads(body)
-
+        async with httpx.AsyncClient(transport=transport, timeout=timeout) as client:
+            # Send an asynchronous, non-blocking GET request
+            response = await client.get(
+                url, 
+                params=params, 
+                headers={"User-Agent": "EarthquakeHazardEngine/1.0"}
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
                 return parse_soilgrids_json(data)
-
             else:
-
-                logger.warning(f"SoilGrids API returned status code {response.status}")
-
+                logger.warning(f"SoilGrids API returned status code {response.status_code}")
+                
+    except httpx.TimeoutException:
+        logger.warning(f"SoilGrids API request timed out after 15 seconds for coordinates ({lat}, {lon})")
     except Exception as e:
-
         logger.warning(f"Failed to fetch SoilGrids API: {str(e)}")
-
-       
-
+        
+    # Safely hit your fallback strategy if the API is down or timing out
     return get_fallback_soil_properties(lat, lon)
 
 

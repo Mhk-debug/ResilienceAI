@@ -4,14 +4,17 @@ from typing import List, Optional, Dict, Any
 class BuildingInput(BaseModel):
     count_floors_pre_eq: int = Field(..., ge=1, le=10, description="Number of stories before the seismic event")
     age: int = Field(..., ge=0, le=999, description="Age of the building frame in years")
-    area_percentage: int = Field(..., ge=1, le=100, description="Normalized footprint area scale")
-    height_percentage: int = Field(..., ge=1, le=100, description="Normalized height scale")
+    area_sq_ft: int = Field(..., ge=70, le=5000, description="Floor area in square feets")
+    height_ft: int = Field(..., ge=6, le=305, description="Height in feets")
     foundation_type: str = Field(..., min_length=1, max_length=1)
     roof_type: str = Field(..., min_length=1, max_length=1)
     ground_floor_type: str = Field(..., min_length=1, max_length=1)
     has_superstructure_mud_mortar_stone: int = Field(..., ge=0, le=1)
     has_superstructure_rc_engineered: int = Field(..., ge=0, le=1)
     has_superstructure_cement_mortar_brick: int = Field(..., ge=0, le=1)
+    has_superstructure_rc_non_engineered: int = Field(..., ge=0, le=1)
+    has_superstructure_adobe_mud: int = Field(..., ge=0, le=1)
+    has_superstructure_timber: int = Field(..., ge=0, le=1)
 
     @field_validator('foundation_type', 'roof_type', 'ground_floor_type')
     @classmethod
@@ -67,19 +70,6 @@ class Indicators(BaseModel):
     historical_activity: IndicatorItem
     soil_liquefaction: IndicatorItem
     fault_proximity: IndicatorItem
-
-
-class HazardStatistics(BaseModel):
-    largest_historical_earthquake: Optional[float] = None
-    closest_earthquake_km: Optional[float] = None
-    average_depth_km: Optional[float] = None
-    average_magnitude: Optional[float] = None
-    median_magnitude: Optional[float] = None
-    events_analyzed: int
-    catalog_span_years: float
-    nearest_fault_distance_km: float
-    estimated_recurrence_interval_years: Optional[float] = None
-    soil_classification: str
 
 
 class ProcessedEvent(BaseModel):
@@ -145,4 +135,25 @@ class LLMAnalysisOutput(BaseModel):
     risk_interpretation: Dict[str, Any]
     confidence: float
 
+class SaveAssessmentRequest(BaseModel):
+    building: ResilienceAssessmentResponse
+    hazard: HazardReport
+    llm: LLMAnalysisOutput
 
+class AssessmentRequest(BaseModel):
+    latitude: float = Field(..., description="Latitude coordinate for hazard calculation")
+    longitude: float = Field(..., description="Longitude coordinate for hazard calculation")
+
+    count_floors_pre_eq: int = Field(..., ge=1, le=10, description="Number of stories before the seismic event")
+    age: int = Field(..., ge=0, le=999, description="Age of the building frame in years")
+    area_sq_ft: int = Field(..., ge=70, le=5000, description="Floor area in square feets")
+    height_ft: int = Field(..., ge=6, le=305, description="Height in feets")
+    foundation_type: str = Field(..., min_length=1, max_length=1)
+    roof_type: str = Field(..., min_length=1, max_length=1)
+    ground_floor_type: str = Field(..., min_length=1, max_length=1)
+    has_superstructure_mud_mortar_stone: int = Field(..., ge=0, le=1)
+    has_superstructure_rc_engineered: int = Field(..., ge=0, le=1)
+    has_superstructure_cement_mortar_brick: int = Field(..., ge=0, le=1)
+    has_superstructure_rc_non_engineered: int = Field(..., ge=0, le=1)
+    has_superstructure_adobe_mud: int = Field(..., ge=0, le=1)
+    has_superstructure_timber: int = Field(..., ge=0, le=1)

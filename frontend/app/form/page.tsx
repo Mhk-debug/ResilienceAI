@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import z from "zod";
-import { Controller, useForm, type Resolver } from "react-hook-form";
+import { Controller, useForm, type Path, type Resolver } from "react-hook-form";
 import { useRouter } from "next/navigation";
 
 const formSchema = z.object({
@@ -121,96 +121,43 @@ export default function FormPage() {
     const onSubmit = async (data: FormFields) => {
         clearErrors();
 
-        // Validate using Zod
+        // 1. Validate using Zod
         const validationResult = formSchema.safeParse(data);
         if (!validationResult.success) {
             validationResult.error.issues.forEach((issue) => {
-                const pathStr = issue.path[0] as string;
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                setError(pathStr as any, { message: issue.message });
+                const pathStr = issue.path[0] as Path<FormFields>;
+                setError(pathStr, { message: issue.message });
             });
 
-            // Auto-scroll to error banner if any
-            const errorDiv = document.getElementById("validation-error-alert");
-            errorDiv?.scrollIntoView({ behavior: "smooth" });
             return;
         }
 
-        const { latitude, longitude, ...buildingReq } = data;
-
         setIsLoading(true);
+
         try {
-            const buildingRes = await fetch(
-                `${BASE_API_URL}/api/resilience/assess`,
-                {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(buildingReq),
-                },
-            );
-
-            if (!buildingRes.ok) throw new Error("Building API failed");
-            const buildingData = await buildingRes.json();
-
-            const hazardRes = await fetch(
-                `${BASE_API_URL}/api/hazard/calculate`,
-                {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        latitude: latitude,
-                        longitude: longitude,
-                        search_radius_km: 100,
-                        historical_years: 50,
-                        minimum_magnitude: 4.5,
-                    }),
-                },
-            );
-
-            if (!hazardRes.ok) throw new Error("Hazard API failed");
-            const hazardData = await hazardRes.json();
-
-            // -----------------------------
-            // 3. LLM ANALYSIS
-            // -----------------------------
-            const llmRes = await fetch(`${BASE_API_URL}/api/llm/analysis`, {
+            // 2. Single unified API request to the backend orchestrator
+            const response = await fetch(`${BASE_API_URL}/api/assessment/process`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    building_context: buildingData.building_llm_context,
-                    environmental_context: hazardData.environmental_context,
-                }),
+                body: JSON.stringify(data), // Sends all FormFields (including lat, lon) together
             });
 
-            if (!llmRes.ok) throw new Error("LLM API failed");
-            const llmData = await llmRes.json();
+            // 3. Handle network or server-side failure
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.detail || "Server failed to process the assessment.");
+            }
 
-            // -----------------------------
-            // 4. MERGE FINAL OUTPUT
-            // -----------------------------
-            const finalPayload = {
-                building: buildingData,
-                hazard: hazardData,
-                llm: llmData,
-                timestamp: Date.now(),
-            };
+            const result = await response.json();
+            const assessmentID = result.assessment_id;
 
-            // -----------------------------
-            // 5. STORE IN LOCALSTORAGE
-            // -----------------------------
-            localStorage.setItem(
-                "earthquake_assessment",
-                JSON.stringify(finalPayload),
-            );
+            // 4. Clean absolute redirect to the dashboard
+            router.push(`/dashboard/${assessmentID}`);
 
-            // -----------------------------
-            // 6. REDIRECT
-            // -----------------------------
-            router.push("/");
         } catch (err: unknown) {
             if (err instanceof Error) {
                 setError("root.serverError", {
-                    message: `Connection failure: ${err.message || "Express API server offline."}`,
+                    message: `Assessment failed: ${err.message}`,
                 });
             }
         } finally {
