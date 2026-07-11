@@ -1,3 +1,4 @@
+import asyncio
 import re
 from backend.services import calculate_hazard
 
@@ -10,7 +11,7 @@ CITIES = [
     { "name": "San Francisco", "lat": 37.7749, "lon": -122.4194, "expected": "75–90 (Very High)" }
 ]
 
-def verify():
+async def verify():
     print("==================================================")
     print("   VERIFYING RECALIBRATED PYTHON HAZARD SCORES    ")
     print("==================================================")
@@ -19,7 +20,7 @@ def verify():
 
     for city in CITIES:
         try:
-            result = calculate_hazard(
+            result = await calculate_hazard(
                 latitude=city["lat"],
                 longitude=city["lon"],
                 search_radius_km=100,
@@ -61,4 +62,4 @@ def verify():
         print("  ❌ SOME PYTHON SCORES FALL OUTSIDE OF EXPECTED BANDS!")
     print("==================================================")
 
-verify()
+asyncio.run(verify())
