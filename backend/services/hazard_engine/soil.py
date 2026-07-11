@@ -4,14 +4,14 @@ hazard_engine/soil.py
 
 """
 
-import urllib.request
-import urllib.parse
-import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import copy
+import time
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional, Tuple
 from owslib.wcs import WebCoverageService
-import tempfile
 import rasterio
+from rasterio.io import MemoryFile
 import numpy as np
 
 
@@ -23,97 +23,119 @@ delta = 0.01 # Increasing this lowers the accuracy of the fallback average soil 
 value = 'mean'
 depths = ["0-5cm", "5-15cm", "15-30cm"]
 
+_SOIL_CACHE_TTL_SECONDS = 60 * 60 * 24  # 24 hours
+_SOIL_CACHE: Dict[Tuple[float, float], Tuple[float, Dict[str, Any]]] = {}
+
+
+def _get_cache_key(lat: float, lon: float) -> Tuple[float, float]:
+    return (round(lat, 3), round(lon, 3))
+
+def _get_cached_soil_properties(lat: float, lon: float) -> Optional[Dict[str, Any]]:
+    cache_key = _get_cache_key(lat, lon)
+    cached_entry = _SOIL_CACHE.get(cache_key)
+    if cached_entry is None:
+        return None
+
+    cached_at, data = cached_entry
+    if time.time() - cached_at > _SOIL_CACHE_TTL_SECONDS:
+        _SOIL_CACHE.pop(cache_key, None)
+        return None
+
+    return copy.deepcopy(data)
+
+def _cache_soil_properties(lat: float, lon: float, data: Dict[str, Any]) -> None:
+    _SOIL_CACHE[_get_cache_key(lat, lon)] = (time.time(), copy.deepcopy(data))
+
+
 def fetch_soilgrids_data(lat: float, lon: float) -> Dict[str, Any]:
+    cached = _get_cached_soil_properties(lat, lon)
+    if cached is not None:
+        return cached
+
     try:
-        rasters = _download_all_layers(lat, lon)
-        values = _sample_all_layers(rasters, lat, lon)
-
-        return _convert_to_features(values)
-
+        values = _fetch_all_layers(lat, lon)
+        result = _convert_to_features(values)
     except Exception as e:
         logger.warning(f"WCS soil fetch failed: {e}")
-        return get_fallback_soil_properties(lat, lon)
+        result = get_fallback_soil_properties(lat, lon)
+
+    _cache_soil_properties(lat, lon, result)
+    return result
 
 
-def _download_all_layers(lat: float, lon: float) -> Dict[str, str]:
-    
+def _fetch_all_layers(lat: float, lon: float) -> Dict[str, float]:
+
     params = {
-        "crs": 'urn:ogc:def:crs:EPSG::4326',
-        "format": 'GEOTIFF_INT16',
-        "resx":0.001,
-        "resy":0.001,
-        "bbox": (lon-delta, lat-delta, lon+delta, lat+delta),
+        "crs": "urn:ogc:def:crs:EPSG::4326",
+        "format": "GEOTIFF_INT16",
+        "resx": 0.001,
+        "resy": 0.001,
+        "bbox": (
+            lon - delta,
+            lat - delta,
+            lon + delta,
+            lat + delta,
+        ),
     }
 
-    files = {}
-
-    for i in range(len(properties_names)):
-        files[properties_names[i]] = []
-
-        for depth in depths:
-            try:
-                properties = f"{properties_names[i]}_{depth}_{value}"
-                url = f"http://maps.isric.org/mapserv?map=/map/{properties_names[i]}.map"
-
-                wcs = WebCoverageService(url, version='1.0.0')
-                response = wcs.getCoverage(
-                    identifier = properties[i],
-                    crs = params["crs"],
-                    bbox = params["bbox"],
-                    resx = params["resx"],
-                    resy = params["resy"],
-                    format = params["format"]
-                )
-
-                tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".tif")
-                tmp.write(response.read())
-                tmp.close()
-
-                files[properties_names[i]].append(tmp.name)
-
-            except Exception as e:
-                logger.warning(f"Failed to fetch SoilGrids API: {str(e)}")
-
-    return files
-
-
-def _sample_all_layers(files: Dict[str, list[str]], lat: float, lon: float) -> Dict[str, float]:
     results = {}
 
-    for prop, layers in files.items():
-        layer_values = []
+    for prop in properties_names:
 
-        for path in layers:
+        depth_values = []
+
+        url = f"https://maps.isric.org/mapserv/{prop}"
+
+        wcs = WebCoverageService(url, version="1.0.0")
+
+        for depth in depths:
+
+            identifier = f"{prop}_{depth}_{value}"
+
             try:
-                with rasterio.open(path) as src:
 
-                    # Try sampling the requested location first
-                    point_val = next(src.sample([(lon, lat)]))[0]
+                response = wcs.getCoverage(
+                    identifier=identifier,
+                    crs=params["crs"],
+                    bbox=params["bbox"],
+                    resx=params["resx"],
+                    resy=params["resy"],
+                    format=params["format"],
+                )
 
-                    nodata = src.nodata
+                data = response.read()
 
-                    # If the sampled point is valid, use it
-                    if nodata is None or point_val != nodata:
-                        layer_values.append(float(point_val))
-                        continue
+                with MemoryFile(data) as memfile:
 
-                    # Otherwise, fall back to averaging all valid pixels
-                    band = src.read(1)
+                    with memfile.open() as src:
 
-                    if nodata is not None:
-                        valid = band[band != nodata]
-                    else:
-                        valid = band.flatten()
+                        point = next(src.sample([(lon, lat)]))[0]
 
-                    if valid.size > 0:
-                        layer_values.append(float(np.mean(valid)))
+                        nodata = src.nodata
+
+                        if nodata is None or point != nodata:
+
+                            depth_values.append(float(point))
+
+                        else:
+
+                            band = src.read(1)
+
+                            if nodata is not None:
+                                valid = band[band != nodata]
+                            else:
+                                valid = band.flatten()
+
+                            if valid.size > 0:
+                                depth_values.append(float(np.mean(valid)))
 
             except Exception as e:
-                logger.warning(f"Sampling failed for {prop}: {e}")
 
-        # Average the 0–5, 5–15 and 15–30 cm layers
-        if layer_values:
-            results[prop] = float(np.mean(layer_values))
+                logger.warning(f"{identifier}: {e}")
+
+        if depth_values:
+
+            results[prop] = float(np.mean(depth_values))
 
     return results
 
