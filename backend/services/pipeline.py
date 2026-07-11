@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 
@@ -36,6 +37,21 @@ class StructuralFeatureExtractor(BaseEstimator, TransformerMixin):
         # Assert logical boundary constraints (Data integrity guardrails)
         if (X_clean['age'] < 0).any():
             raise ValueError("Pipeline Execution Failure: Building 'age' metrics cannot be negative numeric spaces.")
+        
+        X_clean['height_percentage'] = pd.to_numeric(
+            X_clean['height_percentage'],
+            errors='coerce'
+        )
+
+        X_clean['area_percentage'] = pd.to_numeric(
+            X_clean['area_percentage'],
+            errors='coerce'
+        )
+
+        X_clean['count_floors_pre_eq'] = pd.to_numeric(
+            X_clean['count_floors_pre_eq'],
+            errors='coerce'
+        )
             
         # 2. Advanced Feature Extraction: Calculate spatial-free mechanical aspect ratios
         X_clean['height_to_floor_ratio'] = X_clean['height_percentage'] / (X_clean['count_floors_pre_eq'] + 1e-5)
@@ -67,31 +83,83 @@ class StructuralFeatureExtractor(BaseEstimator, TransformerMixin):
         
         return X_clean
 
+def scale_user_inputs(plinth_area_sqft: float, height_ft: float) -> dict:
+    """
+    Translates real physical dimensions into the exact mathematical 
+    quantile mappings used by the Richter Predictor dataset.
+    """
+    # 1. Non-linear mapping for Plinth Area
+    # Connects raw sq footage milestones to the exact Richter area_percentage codes
+    area_sqft_nodes = [70, 250, 500, 1000, 1800, 3500, 5000]
+    richter_area_nodes = [1, 3, 5, 8, 12, 22, 35]
+    
+    # Bound the inputs to protect against extreme out-of-distribution values
+    clamped_area = max(70, min(plinth_area_sqft, 5000))
+    area_percentage = np.interp(clamped_area, area_sqft_nodes, richter_area_nodes)
+    
+    # 2. Non-linear mapping for Building Height
+    # Connects raw physical height in feet to the exact height_percentage codes
+    height_ft_nodes = [6, 12, 18, 30, 50, 90, 305]
+    richter_height_nodes = [2, 3, 5, 8, 14, 25, 32]
+    
+    clamped_height = max(6, min(height_ft, 305))
+    height_percentage = np.interp(clamped_height, height_ft_nodes, richter_height_nodes)
+    
+    return {
+        "area_percentage": int(round(area_percentage)),
+        "height_percentage": int(round(height_percentage))
+    }
 
 def process_and_align_inference_data(raw_input_dict, trained_model, expected_features_list):
     """
-    Utility wrapper designed for real-time inference execution (e.g., inside FastAPI).
-    Converts a single incoming user dictionary payload, pipes it through the Transformer,
-    handles structural categorical alignment, and yields the pure array matrix.
+    Prepare a single inference payload so it matches the feature schema used during training.
+
+    The function converts the raw user payload into a structured DataFrame, derives the
+    required engineering ratios, applies the feature extractor, one-hot encodes the
+    categorical columns, and reorders the final columns to match the training schema.
     """
-    # Convert raw payload into a DataFrame processing space
+    if not isinstance(raw_input_dict, dict):
+        raise TypeError("Input payload must be provided as a dictionary.")
+
+    required_fields = {"area_sq_ft", "height_ft"}
+    missing_fields = required_fields.difference(raw_input_dict.keys())
+    if missing_fields:
+        missing = ", ".join(sorted(missing_fields))
+        raise ValueError(f"Missing required input field(s): {missing}")
+
     df_raw = pd.DataFrame([raw_input_dict])
-    
-    # Initialize and run our Scikit-Learn transformer class block
+
+    plinth_area_sqft = df_raw["area_sq_ft"].iloc[0]
+    height_ft = df_raw["height_ft"].iloc[0]
+    if pd.isna(plinth_area_sqft) or pd.isna(height_ft):
+        raise ValueError("Both 'area_sq_ft' and 'height_ft' must be provided in the input payload.")
+
+    plinth_area_sqft = float(plinth_area_sqft)
+    height_ft = float(height_ft)
+
+    area_percentage, height_percentage = scale_user_inputs(plinth_area_sqft, height_ft)
+
+    df_raw["area_percentage"] = area_percentage
+    df_raw["height_percentage"] = height_percentage
+
+    df_raw = df_raw.drop(columns=["area_sq_ft", "height_ft"], errors="ignore")
+
     transformer = StructuralFeatureExtractor()
     df_transformed = pd.DataFrame(transformer.fit_transform(df_raw))
-    
-    # Apply standard One-Hot string dummy variables expansion
-    categorical_features = ['foundation_type', 'roof_type', 'ground_floor_type']
-    available_cats = [col for col in categorical_features if col in df_transformed.columns]
-    df_encoded = pd.get_dummies(df_transformed, columns=available_cats)
-    
-    # Align structural layout perfectly with the schema layout generated during training
+
+    categorical_features = ["foundation_type", "roof_type", "ground_floor_type"]
+    available_categorical_columns = [
+        col for col in categorical_features if col in df_transformed.columns
+    ]
+    df_encoded = pd.get_dummies(
+        df_transformed,
+        columns=available_categorical_columns,
+        dtype=int,
+    )
+
     for col in expected_features_list:
         if col not in df_encoded.columns:
-            df_encoded[col] = 0  # Impute absent categorical choices safely with 0
-            
-    # Force exact dimension sorting order match
-    df_final = df_encoded[expected_features_list]
-    
+            df_encoded[col] = 0
+
+    df_final = df_encoded.reindex(columns=expected_features_list, fill_value=0)
     return df_final
