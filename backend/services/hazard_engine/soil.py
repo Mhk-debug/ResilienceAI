@@ -4,6 +4,8 @@ hazard_engine/soil.py
 
 """
 
+import asyncio
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import copy
 import time
 import logging
@@ -45,13 +47,15 @@ def _cache_soil_properties(lat: float, lon: float, data: Dict[str, Any]) -> None
     _SOIL_CACHE[_get_cache_key(lat, lon)] = (time.time(), copy.deepcopy(data))
 
 
-def fetch_soilgrids_data(lat: float, lon: float) -> Dict[str, Any]:
+async def fetch_soilgrids_data(lat: float, lon: float) -> Dict[str, Any]:
     cached = _get_cached_soil_properties(lat, lon)
     if cached is not None:
         return cached
 
     try:
-        values = _fetch_all_layers(lat, lon)
+        # Offload the blocking thread pool and WCS network requests 
+        # so they don't lock up your main event loop thread
+        values = await asyncio.to_thread(_fetch_all_layers, lat, lon)
         result = _convert_to_features(values)
     except Exception as e:
         logger.warning(f"WCS soil fetch failed: {e}")
@@ -61,7 +65,7 @@ def fetch_soilgrids_data(lat: float, lon: float) -> Dict[str, Any]:
     return result
 
 
-def _fetch_all_layers(lat: float, lon: float) -> Dict[str, float]:
+def _fetch_all_layers(lat, lon):
 
     params = {
         "crs": "urn:ogc:def:crs:EPSG::4326",
@@ -72,71 +76,86 @@ def _fetch_all_layers(lat: float, lon: float) -> Dict[str, float]:
             lon - delta,
             lat - delta,
             lon + delta,
-            lat + delta,
-        ),
+            lat + delta
+        )
     }
+
+    values = {prop: [] for prop in properties_names}
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+
+        futures = []
+
+        for prop in properties_names:
+            for depth in depths:
+                futures.append(
+                    executor.submit(
+                        _fetch_single_layer,
+                        prop,
+                        depth,
+                        lat,
+                        lon,
+                        params
+                    )
+                )
+
+        for future in as_completed(futures):
+
+            prop, val = future.result()
+
+            if val is not None:
+                values[prop].append(val)
 
     results = {}
 
-    for prop in properties_names:
-
-        depth_values = []
-
-        url = f"https://maps.isric.org/mapserv/{prop}"
-
-        wcs = WebCoverageService(url, version="1.0.0")
-
-        for depth in depths:
-
-            identifier = f"{prop}_{depth}_{value}"
-
-            try:
-
-                response = wcs.getCoverage(
-                    identifier=identifier,
-                    crs=params["crs"],
-                    bbox=params["bbox"],
-                    resx=params["resx"],
-                    resy=params["resy"],
-                    format=params["format"],
-                )
-
-                data = response.read()
-
-                with MemoryFile(data) as memfile:
-
-                    with memfile.open() as src:
-
-                        point = next(src.sample([(lon, lat)]))[0]
-
-                        nodata = src.nodata
-
-                        if nodata is None or point != nodata:
-
-                            depth_values.append(float(point))
-
-                        else:
-
-                            band = src.read(1)
-
-                            if nodata is not None:
-                                valid = band[band != nodata]
-                            else:
-                                valid = band.flatten()
-
-                            if valid.size > 0:
-                                depth_values.append(float(np.mean(valid)))
-
-            except Exception as e:
-
-                logger.warning(f"{identifier}: {e}")
-
-        if depth_values:
-
-            results[prop] = float(np.mean(depth_values))
+    for prop, vals in values.items():
+        if vals:
+            results[prop] = float(np.mean(vals))
 
     return results
 
+def _fetch_single_layer(prop, depth, lat, lon, params):
+
+    identifier = f"{prop}_{depth}_{value}"
+
+    try:
+        wcs = WebCoverageService(
+            f"https://maps.isric.org/mapserv/{prop}",
+            version="1.0.0"
+        )
+
+        response = wcs.getCoverage(
+            identifier=identifier,
+            crs=params["crs"],
+            bbox=params["bbox"],
+            resx=params["resx"],
+            resy=params["resy"],
+            format=params["format"]
+        )
+
+        with MemoryFile(response.read()) as memfile:
+            with memfile.open() as src:
+
+                point = next(src.sample([(lon, lat)]))[0]
+                nodata = src.nodata
+
+                if nodata is None or point != nodata:
+                    return prop, float(point)
+
+                band = src.read(1)
+
+                if nodata is not None:
+                    valid = band[band != nodata]
+                else:
+                    valid = band.flatten()
+
+                if valid.size:
+                    return prop, float(np.mean(valid))
+
+    except Exception as e:
+        logger.warning(f"{identifier}: {e}")
+
+    return prop, None
 
 def _convert_to_features(v: Dict[str, float]) -> Dict[str, Any]:
 
