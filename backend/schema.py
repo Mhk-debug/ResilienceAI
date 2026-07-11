@@ -1,4 +1,7 @@
-from pydantic import BaseModel, Field, field_validator
+from datetime import datetime
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import List, Optional, Dict, Any
 
 class BuildingInput(BaseModel):
@@ -157,3 +160,24 @@ class AssessmentRequest(BaseModel):
     has_superstructure_rc_non_engineered: int = Field(..., ge=0, le=1)
     has_superstructure_adobe_mud: int = Field(..., ge=0, le=1)
     has_superstructure_timber: int = Field(..., ge=0, le=1)
+
+class AssessmentIDResponse(BaseModel):
+    """Pydantic model representing the complete Assessment output."""
+    id: UUID
+    created_at: datetime
+    latitude: float
+    longitude: float
+    resilience_score: float
+    hazard_score: float
+    hazard_level: str
+    
+    # JSONB dictionaries
+    building: Dict[str, Any]
+    hazard: Dict[str, Any]
+    llm: Dict[str, Any]
+    
+    model_version: Optional[str] = None
+    execution_time_seconds: Optional[float] = None
+
+    # This config tells Pydantic to read data directly from the SQLAlchemy ORM model properties
+    model_config = ConfigDict(from_attributes=True)

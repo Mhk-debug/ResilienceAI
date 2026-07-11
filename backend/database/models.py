@@ -21,7 +21,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from .session import Base
 
-
 class Assessment(Base):
     __tablename__ = "assessments"
 
