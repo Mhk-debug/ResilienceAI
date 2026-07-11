@@ -9,7 +9,7 @@ from google import genai
 from google.genai import types
 import certifi
 
-from schema import (
+from project_schema import (
     BuildingLLMContext,
     EnvironmentalContext,
     LLMAnalysisInput,

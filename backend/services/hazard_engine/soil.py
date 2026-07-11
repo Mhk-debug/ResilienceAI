@@ -4,150 +4,168 @@ hazard_engine/soil.py
 
 """
 
+import copy
+import time
 import logging
-
-from typing import Dict, Any
-
+from typing import Dict, Any, Optional, Tuple
+from owslib.wcs import WebCoverageService
+from rasterio.io import MemoryFile
+import numpy as np
 
 
 logger = logging.getLogger(__name__)
 
 
+properties_names = ["clay", "sand", "silt", "bdod", "cfvo", "soc"]
+delta = 0.01 # Increasing this lowers the accuracy of the fallback average soil properties
+value = 'mean'
+depths = ["0-5cm", "5-15cm", "15-30cm"]
 
-import httpx
-import logging
-from typing import Dict, Any
+_SOIL_CACHE_TTL_SECONDS = 60 * 60 * 24  # 24 hours
+_SOIL_CACHE: Dict[Tuple[float, float], Tuple[float, Dict[str, Any]]] = {}
 
-logger = logging.getLogger(__name__)
 
-async def fetch_soilgrids_data(lat: float, lon: float) -> Dict[str, Any]:
-    url = "https://rest.isric.org/soilgrids/v2.0/properties/query"
-    properties = ["clay", "sand", "silt", "bdod", "cfvo", "ocd"]
-    
+def _get_cache_key(lat: float, lon: float) -> Tuple[float, float]:
+    return (round(lat, 3), round(lon, 3))
+
+def _get_cached_soil_properties(lat: float, lon: float) -> Optional[Dict[str, Any]]:
+    cache_key = _get_cache_key(lat, lon)
+    cached_entry = _SOIL_CACHE.get(cache_key)
+    if cached_entry is None:
+        return None
+
+    cached_at, data = cached_entry
+    if time.time() - cached_at > _SOIL_CACHE_TTL_SECONDS:
+        _SOIL_CACHE.pop(cache_key, None)
+        return None
+
+    return copy.deepcopy(data)
+
+def _cache_soil_properties(lat: float, lon: float, data: Dict[str, Any]) -> None:
+    _SOIL_CACHE[_get_cache_key(lat, lon)] = (time.time(), copy.deepcopy(data))
+
+
+def fetch_soilgrids_data(lat: float, lon: float) -> Dict[str, Any]:
+    cached = _get_cached_soil_properties(lat, lon)
+    if cached is not None:
+        return cached
+
+    try:
+        values = _fetch_all_layers(lat, lon)
+        result = _convert_to_features(values)
+    except Exception as e:
+        logger.warning(f"WCS soil fetch failed: {e}")
+        result = get_fallback_soil_properties(lat, lon)
+
+    _cache_soil_properties(lat, lon, result)
+    return result
+
+
+def _fetch_all_layers(lat: float, lon: float) -> Dict[str, float]:
+
     params = {
-        "lon": lon,
-        "lat": lat,
-        "property": properties,
-        "value": "mean"
+        "crs": "urn:ogc:def:crs:EPSG::4326",
+        "format": "GEOTIFF_INT16",
+        "resx": 0.001,
+        "resy": 0.001,
+        "bbox": (
+            lon - delta,
+            lat - delta,
+            lon + delta,
+            lat + delta,
+        ),
     }
-    
-    # Configure an HTTP transport layer that automatically retries dropped connections
-    transport = httpx.AsyncHTTPTransport(retries=3)
-    
-    # Extended timeout configuration:
-    # 5.0s to connect, 15.0s to wait for SoilGrids to finish its heavy database read
-    timeout = httpx.Timeout(timeout=15.0, connect=5.0)
 
-    try:
-        async with httpx.AsyncClient(transport=transport, timeout=timeout) as client:
-            # Send an asynchronous, non-blocking GET request
-            response = await client.get(
-                url, 
-                params=params, 
-                headers={"User-Agent": "EarthquakeHazardEngine/1.0"}
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                return parse_soilgrids_json(data)
-            else:
-                logger.warning(f"SoilGrids API returned status code {response.status_code}")
-                
-    except httpx.TimeoutException:
-        logger.warning(f"SoilGrids API request timed out after 15 seconds for coordinates ({lat}, {lon})")
-    except Exception as e:
-        logger.warning(f"Failed to fetch SoilGrids API: {str(e)}")
-        
-    # Safely hit your fallback strategy if the API is down or timing out
-    return get_fallback_soil_properties(lat, lon)
+    results = {}
 
+    for prop in properties_names:
 
+        depth_values = []
 
-def parse_soilgrids_json(data: Dict[str, Any]) -> Dict[str, Any]:
+        url = f"https://maps.isric.org/mapserv/{prop}"
 
-    raw_properties = {}
+        wcs = WebCoverageService(url, version="1.0.0")
 
-    try:
+        for depth in depths:
 
-        layers = data.get("properties", {}).get("layers", [])
+            identifier = f"{prop}_{depth}_{value}"
 
-        for layer in layers:
+            try:
 
-            name = layer.get("name")
+                response = wcs.getCoverage(
+                    identifier=identifier,
+                    crs=params["crs"],
+                    bbox=params["bbox"],
+                    resx=params["resx"],
+                    resy=params["resy"],
+                    format=params["format"],
+                )
 
-            depths = layer.get("depths", [])
+                data = response.read()
 
-            values = []
+                with MemoryFile(data) as memfile:
 
-            for d in depths:
+                    with memfile.open() as src:
 
-                label = d.get("label", "")
+                        point = next(src.sample([(lon, lat)]))[0]
 
-                if label in ["0-5cm", "5-15cm", "15-30cm"]:
+                        nodata = src.nodata
 
-                    mean_val = d.get("values", {}).get("mean")
+                        if nodata is None or point != nodata:
 
-                    if mean_val is not None:
+                            depth_values.append(float(point))
 
-                        values.append(mean_val)
+                        else:
 
-            if values:
+                            band = src.read(1)
 
-                avg_val = sum(values) / len(values)
+                            if nodata is not None:
+                                valid = band[band != nodata]
+                            else:
+                                valid = band.flatten()
 
-                raw_properties[name] = avg_val
+                            if valid.size > 0:
+                                depth_values.append(float(np.mean(valid)))
 
-    except Exception as e:
+            except Exception as e:
 
-        logger.error(f"Error parsing SoilGrids JSON: {str(e)}")
+                logger.warning(f"{identifier}: {e}")
+
+        if depth_values:
+
+            results[prop] = float(np.mean(depth_values))
+
+    return results
 
 
+def _convert_to_features(v: Dict[str, float]) -> Dict[str, Any]:
 
-    sand_pct = raw_properties.get("sand", 400.0) / 10.0
+    sand = v.get("sand", 400) / 10.0
+    clay = v.get("clay", 250) / 10.0
+    silt = v.get("silt", 350) / 10.0
 
-    clay_pct = raw_properties.get("clay", 250.0) / 10.0
+    bdod = v.get("bdod", 1300) / 1000.0
+    cfvo = v.get("cfvo", 100) / 10.0
+    soc = v.get("soc", 150) / 1000.0
 
-    silt_pct = raw_properties.get("silt", 350.0) / 10.0
-
-    bulk_density = raw_properties.get("bdod", 1350.0) / 1000.0
-
-    coarse_frags = raw_properties.get("cfvo", 100.0) / 10.0
-
-    org_carbon = raw_properties.get("ocd", 150.0) / 1000.0
-
-   
-
-    total_frac = sand_pct + clay_pct + silt_pct
-
-    if total_frac > 0:
-
-        sand_pct = (sand_pct / total_frac) * 100.0
-
-        clay_pct = (clay_pct / total_frac) * 100.0
-
-        silt_pct = (silt_pct / total_frac) * 100.0
-
-
+    # normalize texture
+    total = sand + clay + silt
+    if total > 0:
+        sand = sand / total * 100
+        clay = clay / total * 100
+        silt = silt / total * 100
 
     return {
+        "sand_pct": sand,
+        "clay_pct": clay,
+        "silt_pct": silt,
 
-        "sand_pct": sand_pct,
-
-        "clay_pct": clay_pct,
-
-        "silt_pct": silt_pct,
-
-        "bulk_density": bulk_density,
-
-        "coarse_fragments_pct": coarse_frags,
-
-        "organic_carbon_pct": org_carbon,
+        "bulk_density": bdod,
+        "coarse_fragments_pct": cfvo,
+        "organic_carbon_pct": soc,
 
         "source": "SoilGrids API"
-
     }
-
-
 
 def get_fallback_soil_properties(lat: float, lon: float) -> Dict[str, Any]:
 
