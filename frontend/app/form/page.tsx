@@ -16,7 +16,11 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import z from "zod";
+<<<<<<< HEAD
 import { Controller, useForm, type Resolver } from "react-hook-form";
+=======
+import { Controller, useForm, type Path, type Resolver } from "react-hook-form";
+>>>>>>> e89f9c6d2ac92eeaa27bba7d1f0d746f84633303
 import { useRouter } from "next/navigation";
 
 const formSchema = z.object({
@@ -121,6 +125,7 @@ export default function FormPage() {
     const onSubmit = async (data: FormFields) => {
         clearErrors();
 
+<<<<<<< HEAD
         // Validate using Zod
         const validationResult = formSchema.safeParse(data);
         if (!validationResult.success) {
@@ -211,6 +216,45 @@ export default function FormPage() {
             if (err instanceof Error) {
                 setError("root.serverError", {
                     message: `Connection failure: ${err.message || "Express API server offline."}`,
+=======
+        // 1. Validate using Zod
+        const validationResult = formSchema.safeParse(data);
+        if (!validationResult.success) {
+            validationResult.error.issues.forEach((issue) => {
+                const pathStr = issue.path[0] as Path<FormFields>;
+                setError(pathStr, { message: issue.message });
+            });
+
+            return;
+        }
+
+        setIsLoading(true);
+
+        try {
+            // 2. Single unified API request to the backend orchestrator
+            const response = await fetch(`${BASE_API_URL}/api/assessment/process`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data), // Sends all FormFields (including lat, lon) together
+            });
+
+            // 3. Handle network or server-side failure
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.detail || "Server failed to process the assessment.");
+            }
+
+            const result = await response.json();
+            const assessmentID = result.assessment_id;
+
+            // 4. Clean absolute redirect to the dashboard
+            router.push(`/dashboard/${assessmentID}`);
+
+        } catch (err: unknown) {
+            if (err instanceof Error) {
+                setError("root.serverError", {
+                    message: `Assessment failed: ${err.message}`,
+>>>>>>> e89f9c6d2ac92eeaa27bba7d1f0d746f84633303
                 });
             }
         } finally {

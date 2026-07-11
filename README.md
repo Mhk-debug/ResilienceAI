@@ -1,5 +1,28 @@
 # ResilienceAI
 
+An AI-powered earthquake hazard assessment system that analyzes building characteristics, seismic activity, fault proximity, and soil characteristics to estimate earthquake risk for a building.
+
+---
+
+## Requirements
+
+Before running the project, make sure you have installed:
+
+- Python 3.11 or later
+
+> Go to the Official Python Downloads Page to grab the executable for your operating system. Run the installer, and crucially, make sure to check the box for "Add Python to PATH" before clicking "Install Now."
+
+- Node.js (LTS recommended)
+- uvicorn
+
+```bash
+pip install "uvicorn[standard]"
+```
+
+- npm
+
+---
+
 ## Setup
 
 ### 1. Clone the repository
