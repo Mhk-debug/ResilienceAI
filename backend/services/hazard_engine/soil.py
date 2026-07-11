@@ -4,13 +4,11 @@ hazard_engine/soil.py
 
 """
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import copy
 import time
 import logging
 from typing import Dict, Any, Optional, Tuple
 from owslib.wcs import WebCoverageService
-import rasterio
 from rasterio.io import MemoryFile
 import numpy as np
 
