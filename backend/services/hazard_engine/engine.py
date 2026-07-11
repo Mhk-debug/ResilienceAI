@@ -3,7 +3,8 @@ hazard_engine/engine.py
 """
 import time
 from typing import Dict, Any, List
-from schema import HazardInput, HazardReport
+
+from backend.project_schema import HazardInput, HazardReport
 from .usgs import query_usgs_catalog
 from .shakemap import integrate_shakemap_data
 from .soil import fetch_soilgrids_data, evaluate_liquefaction_risk

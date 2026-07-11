@@ -1,5 +1,5 @@
 import re
-from services import calculate_hazard
+from backend.services import calculate_hazard
 
 CITIES = [
     { "name": "Singapore", "lat": 1.3521, "lon": 103.8198, "expected": "10–25 (Very Low)" },

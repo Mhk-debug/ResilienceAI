@@ -2,7 +2,7 @@
 # LIVE INTEGRATION TEST WITH MOCK DATA
 # =========================================================
 
-from schema import BuildingLLMContext, EnvironmentalContext, LLMAnalysisInput, LLMAnalysisOutput, LLMFaultContext, LLMGroundMotionContext, LLMHistoricalActivity, LLMSoilContext
+from backend.project_schema import BuildingLLMContext, EnvironmentalContext, LLMAnalysisInput, LLMAnalysisOutput, LLMFaultContext, LLMGroundMotionContext, LLMHistoricalActivity, LLMSoilContext
 from services.llm_services import create_llm_service
 
 
