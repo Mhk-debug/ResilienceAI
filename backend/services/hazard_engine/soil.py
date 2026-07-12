@@ -124,6 +124,9 @@ def _fetch_single_layer(prop, depth, lat, lon, params):
             version="1.0.0"
         )
 
+        if wcs is None:
+            raise Exception("Web Coverage Service unavailable")
+
         response = wcs.getCoverage(
             identifier=identifier,
             crs=params["crs"],
