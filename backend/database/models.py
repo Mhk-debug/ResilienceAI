@@ -50,6 +50,11 @@ class Assessment(Base):
     # Location
     # -------------------------
 
+    place_name: Mapped[str | None] = mapped_column(
+        String, 
+        nullable=True
+    )
+    
     latitude: Mapped[float] = mapped_column(
         Float,
         nullable=False,
@@ -85,6 +90,11 @@ class Assessment(Base):
     # -------------------------
     # Complete API Outputs
     # -------------------------
+
+    profile: Mapped[dict] = mapped_column(
+        JSONB,
+        nullable=False,
+    )
 
     building: Mapped[dict] = mapped_column(
         JSONB,

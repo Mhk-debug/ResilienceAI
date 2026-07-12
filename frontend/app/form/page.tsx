@@ -16,11 +16,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import z from "zod";
-<<<<<<< HEAD
-import { Controller, useForm, type Resolver } from "react-hook-form";
-=======
 import { Controller, useForm, type Path, type Resolver } from "react-hook-form";
->>>>>>> e89f9c6d2ac92eeaa27bba7d1f0d746f84633303
 import { useRouter } from "next/navigation";
 
 const formSchema = z.object({
@@ -124,99 +120,6 @@ export default function FormPage() {
 
     const onSubmit = async (data: FormFields) => {
         clearErrors();
-
-<<<<<<< HEAD
-        // Validate using Zod
-        const validationResult = formSchema.safeParse(data);
-        if (!validationResult.success) {
-            validationResult.error.issues.forEach((issue) => {
-                const pathStr = issue.path[0] as string;
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                setError(pathStr as any, { message: issue.message });
-            });
-
-            // Auto-scroll to error banner if any
-            const errorDiv = document.getElementById("validation-error-alert");
-            errorDiv?.scrollIntoView({ behavior: "smooth" });
-            return;
-        }
-
-        const { latitude, longitude, ...buildingReq } = data;
-
-        setIsLoading(true);
-        try {
-            const buildingRes = await fetch(
-                `${BASE_API_URL}/api/resilience/assess`,
-                {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(buildingReq),
-                },
-            );
-
-            if (!buildingRes.ok) throw new Error("Building API failed");
-            const buildingData = await buildingRes.json();
-
-            const hazardRes = await fetch(
-                `${BASE_API_URL}/api/hazard/calculate`,
-                {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        latitude: latitude,
-                        longitude: longitude,
-                        search_radius_km: 100,
-                        historical_years: 50,
-                        minimum_magnitude: 4.5,
-                    }),
-                },
-            );
-
-            if (!hazardRes.ok) throw new Error("Hazard API failed");
-            const hazardData = await hazardRes.json();
-
-            // -----------------------------
-            // 3. LLM ANALYSIS
-            // -----------------------------
-            const llmRes = await fetch(`${BASE_API_URL}/api/llm/analysis`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    building_context: buildingData.building_llm_context,
-                    environmental_context: hazardData.environmental_context,
-                }),
-            });
-
-            if (!llmRes.ok) throw new Error("LLM API failed");
-            const llmData = await llmRes.json();
-
-            // -----------------------------
-            // 4. MERGE FINAL OUTPUT
-            // -----------------------------
-            const finalPayload = {
-                building: buildingData,
-                hazard: hazardData,
-                llm: llmData,
-                timestamp: Date.now(),
-            };
-
-            // -----------------------------
-            // 5. STORE IN LOCALSTORAGE
-            // -----------------------------
-            localStorage.setItem(
-                "earthquake_assessment",
-                JSON.stringify(finalPayload),
-            );
-
-            // -----------------------------
-            // 6. REDIRECT
-            // -----------------------------
-            router.push("/");
-        } catch (err: unknown) {
-            if (err instanceof Error) {
-                setError("root.serverError", {
-                    message: `Connection failure: ${err.message || "Express API server offline."}`,
-=======
         // 1. Validate using Zod
         const validationResult = formSchema.safeParse(data);
         if (!validationResult.success) {
@@ -251,10 +154,13 @@ export default function FormPage() {
             router.push(`/dashboard/${assessmentID}`);
 
         } catch (err: unknown) {
+            window.scrollTo({
+                top: 0,
+                behavior: "smooth",
+            });
             if (err instanceof Error) {
                 setError("root.serverError", {
                     message: `Assessment failed: ${err.message}`,
->>>>>>> e89f9c6d2ac92eeaa27bba7d1f0d746f84633303
                 });
             }
         } finally {
@@ -1180,7 +1086,7 @@ export default function FormPage() {
                         <button
                             type="submit"
                             disabled={isLoading}
-                            className="flex items-center justify-center gap-2 w-full sm:flex-1 rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90 transition-all shadow-sm"
+                            className="flex items-center justify-center gap-2 w-full sm:flex-1 rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90 transition-all shadow-sm disabled:cursor-not-allowed"
                         >
                             <BarChart2 className="h-4 w-4" />
                             {isLoading

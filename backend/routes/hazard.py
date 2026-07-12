@@ -2,7 +2,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from services import calculate_hazard_pydantic
-from schema import HazardInput, HazardReport
+from project_schema import HazardInput, HazardReport
 
 logger = logging.getLogger(__name__)
 

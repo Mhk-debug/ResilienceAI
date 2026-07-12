@@ -1,7 +1,7 @@
 import logging
 from fastapi import APIRouter, HTTPException
 from services.llm_services import create_llm_service
-from schema import LLMAnalysisInput, LLMAnalysisOutput
+from project_schema import LLMAnalysisInput, LLMAnalysisOutput
 
 logger = logging.getLogger(__name__)
 
