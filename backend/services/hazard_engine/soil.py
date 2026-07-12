@@ -144,13 +144,29 @@ def _fetch_single_layer(prop, depth, lat, lon, params):
 
                 band = src.read(1)
 
-                if nodata is not None:
-                    valid = band[band != nodata]
-                else:
-                    valid = band.flatten()
+                row, col = src.index(lon, lat)
 
-                if valid.size:
-                    return prop, float(np.mean(valid))
+                max_radius = 5      # searches up to an 11×11 window
+
+                for radius in range(1, max_radius + 1):
+
+                    r0 = max(0, row - radius)
+                    r1 = min(src.height, row + radius + 1)
+
+                    c0 = max(0, col - radius)
+                    c1 = min(src.width, col + radius + 1)
+
+                    window = band[r0:r1, c0:c1]
+
+                    if nodata is not None:
+                        valid = window[window != nodata]
+                    else:
+                        valid = window.flatten()
+
+                    if valid.size > 0:
+                        return prop, float(np.mean(valid))
+
+                return prop, None
 
     except Exception as e:
         logger.warning(f"{identifier}: {e}")
