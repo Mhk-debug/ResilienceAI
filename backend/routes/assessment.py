@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from database import get_db, Assessment
-from schema import AssessmentIDResponse, AssessmentRequest, BuildingInput, HazardInput, SaveAssessmentRequest, LLMAnalysisInput
+from project_schema import AssessmentIDResponse, AssessmentRequest, BuildingInput, HazardInput, SaveAssessmentRequest, LLMAnalysisInput
 
 # Direct imports from other routers/services to avoid internal httpx calls
 from routes.resilience import calculate_pure_resilience
@@ -20,6 +20,21 @@ router = APIRouter(
     tags=["Orchestration", "Database"]
 )
 
+from geopy.geocoders import Nominatim
+
+geolocator = Nominatim(user_agent="resilience-ai")
+
+async def get_place_name(
+    latitude: float,
+    longitude: float,
+) -> str | None:
+    location = await asyncio.to_thread(
+        geolocator.reverse,
+        (latitude, longitude),
+    )
+
+    return getattr(location, "address", None) if location else None
+
 @router.post("/save", status_code=status.HTTP_201_CREATED, summary="Persist a complete earthquake risk assessment")
 async def save_assessment(request: SaveAssessmentRequest, db: Session = Depends(get_db)):
     """Persists the complete assessment into relational columns and JSONB documents."""
@@ -27,19 +42,27 @@ async def save_assessment(request: SaveAssessmentRequest, db: Session = Depends(
         building = request.building.model_dump(mode="json")
         hazard = request.hazard.model_dump(mode="json")
         llm = request.llm.model_dump(mode="json")
+        profile = request.profile.model_dump(mode="json")
 
         location = hazard["location"]
         hazard_metrics = hazard["hazard"]
         metadata = hazard.get("metadata", {})
+        
+        place_name = await get_place_name(
+            location["latitude"],
+            location["longitude"],
+        )
 
         assessment = Assessment(
             latitude=location["latitude"],
             longitude=location["longitude"],
+            place_name=place_name,
             resilience_score=building["resilience_score"],
             hazard_score=hazard_metrics["overall_score"],
             hazard_level=hazard_metrics["hazard_level"],
             model_version=metadata.get("model_version"),
             execution_time_seconds=metadata.get("execution_time_seconds"),
+            profile=profile,
             building=building,
             hazard=hazard,
             llm=llm,
@@ -59,10 +82,12 @@ async def save_assessment(request: SaveAssessmentRequest, db: Session = Depends(
         }
 
     except SQLAlchemyError:
+        print(traceback.format_exc())
         db.rollback()
         logger.exception("Database transaction failed.")
         raise HTTPException(status_code=500, detail="Failed to persist assessment.")
     except Exception:
+        print(traceback.format_exc())
         db.rollback()
         logger.exception("Unexpected server exception.")
         raise HTTPException(status_code=500, detail="Unexpected internal server error.")
@@ -110,6 +135,7 @@ async def process_assessment(payload: AssessmentRequest, request: Request, db: S
 
         # 4. Save to database via internal function call
         save_payload = SaveAssessmentRequest(
+            profile=building_input_payload,
             building=building_data,
             hazard=hazard_data,
             llm=llm_data

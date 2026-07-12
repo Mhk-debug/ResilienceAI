@@ -18,6 +18,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, 'models', 'seismic_resilience_xgb.pkl')
 SCHEMA_PATH = os.path.join(BASE_DIR, 'models', 'model_features.json')
 
+print("Database reset complete")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handles the boot initialization and resource cleanup cycles."""

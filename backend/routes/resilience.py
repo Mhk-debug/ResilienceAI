@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from services.resilience_service import predict_resilience
 # Import specific schema dependencies if needed, or define them here as requested.
-from schema import BuildingInput, ResilienceAssessmentResponse 
+from project_schema import BuildingInput, ResilienceAssessmentResponse 
 
 logger = logging.getLogger(__name__)
 

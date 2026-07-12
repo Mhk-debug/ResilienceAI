@@ -1,6 +1,6 @@
 import logging
 
-from schema import (
+from project_schema import (
     BuildingInput,
     ResilienceAssessmentResponse,
     BuildingLLMContext

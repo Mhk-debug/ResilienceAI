@@ -138,11 +138,6 @@ class LLMAnalysisOutput(BaseModel):
     risk_interpretation: Dict[str, Any]
     confidence: float
 
-class SaveAssessmentRequest(BaseModel):
-    building: ResilienceAssessmentResponse
-    hazard: HazardReport
-    llm: LLMAnalysisOutput
-
 class AssessmentRequest(BaseModel):
     latitude: float = Field(..., description="Latitude coordinate for hazard calculation")
     longitude: float = Field(..., description="Longitude coordinate for hazard calculation")
@@ -161,10 +156,17 @@ class AssessmentRequest(BaseModel):
     has_superstructure_adobe_mud: int = Field(..., ge=0, le=1)
     has_superstructure_timber: int = Field(..., ge=0, le=1)
 
+class SaveAssessmentRequest(BaseModel):
+    profile: BuildingInput
+    building: ResilienceAssessmentResponse
+    hazard: HazardReport
+    llm: LLMAnalysisOutput
+
 class AssessmentIDResponse(BaseModel):
     """Pydantic model representing the complete Assessment output."""
     id: UUID
     created_at: datetime
+    place_name: str
     latitude: float
     longitude: float
     resilience_score: float
@@ -172,6 +174,7 @@ class AssessmentIDResponse(BaseModel):
     hazard_level: str
     
     # JSONB dictionaries
+    profile: Dict[str, Any]
     building: Dict[str, Any]
     hazard: Dict[str, Any]
     llm: Dict[str, Any]

@@ -44,3 +44,148 @@ export const GROUND_FLOOR_OPTIONS: SelectionOption[] = [
   { value: "mud_floor", label: "Mud Floor", encodedValue: "f", description: "Compacted soil; no structural shear transmission." },
   { value: "other_floor", label: "Other", encodedValue: "z", description: "Alternative floor compositions." },
 ];
+
+export interface BuildingLLMContext {
+  structural: Record<string, any>;
+  material: Record<string, any>;
+  substructure: Record<string, any>;
+}
+
+export interface ResilienceAssessmentResponse {
+  status: string;
+  resilience_score: number;
+  building_llm_context: BuildingLLMContext;
+}
+
+export interface IndicatorItem {
+  value: any;
+  classification: string;
+  color: 'green' | 'yellow' | 'red' | string;
+}
+
+export interface Indicators {
+  seismic_zone: IndicatorItem;
+  historical_activity: IndicatorItem;
+  soil_liquefaction: IndicatorItem;
+  fault_proximity: IndicatorItem;
+}
+
+export interface ProcessedEvent {
+  id: string;
+  magnitude: number;
+  distance_km: number;
+  depth_km: number;
+  date: string;
+  place: string;
+  individual_contribution: number;
+  distance_weight: number;
+  depth_weight: number;
+  age_weight: number;
+  magnitude_weight: number;
+}
+
+export interface LLMHistoricalActivity {
+  classification: string;
+  events_within_radius: number;
+  largest_magnitude?: number | null;
+}
+
+export interface LLMFaultContext {
+  distance_km: number;
+  classification: string;
+}
+
+export interface LLMSoilContext {
+  classification: string;
+  dominant_soil: string;
+}
+
+export interface LLMGroundMotionContext {
+  estimated_mmi: number;
+  estimated_pga_g: number;
+  confidence: number;
+}
+
+export interface EnvironmentalContext {
+  hazard_score: number;
+  hazard_level: string;
+  historical_activity: LLMHistoricalActivity;
+  faults: LLMFaultContext;
+  soil: LLMSoilContext;
+  ground_motion: LLMGroundMotionContext;
+  summary: string[];
+}
+
+export interface HazardReport {
+  location: Record<string, any>;
+  hazard: Record<string, any>;
+  indicators: Indicators;
+  statistics: Record<string, any>;
+  environmental_context: EnvironmentalContext;
+  events: ProcessedEvent[];
+  metadata: Record<string, any>;
+}
+
+export interface LLMRecommendation {
+  priority: 'red' | 'yellow' | 'blue';
+  title: string;
+  description: string;
+}
+
+export interface LLMAnalysisOutput {
+  summary: string[];
+  recommendations: LLMRecommendation[];
+  risk_interpretation: Record<string, any>;
+  confidence: number;
+}
+
+export interface AssessmentRequest {
+  latitude: number;
+  longitude: number;
+  count_floors_pre_eq: number;
+  age: number;
+  area_sq_ft: number;
+  height_ft: number;
+  foundation_type: string;
+  roof_type: string;
+  ground_floor_type: string;
+  has_superstructure_mud_mortar_stone: number;
+  has_superstructure_rc_engineered: number;
+  has_superstructure_cement_mortar_brick: number;
+  has_superstructure_rc_non_engineered: number;
+  has_superstructure_adobe_mud: number;
+  has_superstructure_timber: number;
+}
+
+export interface BuildingInput {
+    count_floors_pre_eq: number;
+    age: number;
+    area_sq_ft: number;
+    height_ft: number;
+    foundation_type: string;
+    roof_type: string;
+    ground_floor_type: string;
+    has_superstructure_mud_mortar_stone: number;
+    has_superstructure_rc_engineered: number;
+    has_superstructure_cement_mortar_brick: number;
+    has_superstructure_rc_non_engineered: number;
+    has_superstructure_adobe_mud: number;
+    has_superstructure_timber: number;
+}
+
+export interface AssessmentIDResponse {
+  id: string;
+  created_at: string;
+  place_name?: string;
+  latitude: number;
+  longitude: number;
+  resilience_score: number;
+  hazard_score: number;
+  hazard_level: string;
+  profile: BuildingInput;
+  building: ResilienceAssessmentResponse;
+  hazard: HazardReport;
+  llm: LLMAnalysisOutput;
+  model_version?: string | null;
+  execution_time_seconds?: number | null;
+}
