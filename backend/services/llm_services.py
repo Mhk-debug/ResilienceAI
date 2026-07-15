@@ -187,62 +187,82 @@ ENVIRONMENTAL CONTEXT:
 -----------------------------
 
 OUTPUT REQUIREMENTS:
-- "summary" must be a list of short bullet-point strings explaining key findings.
-- "recommendations" must contain AT LEAST 4 actionable engineering or safety recommendations.
-- Each recommendation must include:
-  - priority: "red" | "orange" | "yellow" | "green"
-  - title: short label
-  - description: detailed actionable guidance
-- "risk_interpretation" must provide structured reasoning for:
-  - structural assessment
-  - environmental assessment
-  - overall reasoning
-- "confidence" must be a float between 0 and 1 representing certainty.
 
+1. "summary" MUST contain EXACTLY 6 short bullet-point strings representing the
+   most important key findings from the assessment.
+
+2. "recommendations" MUST contain EXACTLY 5 actionable engineering or safety recommendations.
+
+3. Each recommendation MUST include:
+   - priority: exactly one of "red", "orange", "yellow", or "green"
+   - title: a short, clear label
+   - description: detailed and actionable guidance
+
+4. "risk_interpretation" MUST provide structured reasoning for:
+   - structural assessment
+   - environmental assessment
+   - overall reasoning
+   
 -----------------------------
 OUTPUT FORMAT (STRICT JSON):
 
 {{
   "summary": [
-    "string",
-    "string",
-    "string"
+    "Key finding 1",
+    "Key finding 2",
+    "Key finding 3",
+    "Key finding 4",
+    "Key finding 5",
+    "Key finding 6"
   ],
   "recommendations": [
     {{
       "priority": "red",
-      "title": "string",
-      "description": "string"
+      "title": "Recommendation title",
+      "description": "Detailed actionable engineering or safety guidance"
     }},
     {{
       "priority": "orange",
-      "title": "string",
-      "description": "string"
+      "title": "Recommendation title",
+      "description": "Detailed actionable engineering or safety guidance"
     }},
     {{
       "priority": "yellow",
-      "title": "string",
-      "description": "string"
+      "title": "Recommendation title",
+      "description": "Detailed actionable engineering or safety guidance"
+    }},
+    {{
+      "priority": "yellow",
+      "title": "Recommendation title",
+      "description": "Detailed actionable engineering or safety guidance"
     }},
     {{
       "priority": "green",
-      "title": "string",
-      "description": "string"
+      "title": "Recommendation title",
+      "description": "Detailed actionable engineering or safety guidance"
     }}
   ],
   "risk_interpretation": {{
-    "structural_assessment": "string",
-    "environmental_assessment": "string",
-    "overall_reasoning": "string"
+    "structural_assessment": "Structured reasoning about the building's structural vulnerability",
+    "environmental_assessment": "Structured reasoning about environmental seismic hazards",
+    "overall_reasoning": "Integrated reasoning explaining the overall risk assessment"
   }},
-  "confidence": 0.0
 }}
 
 STRICT RULES:
-- Output ONLY valid JSON (no markdown, no commentary)
-- Always include at least 4 recommendations
-- Keep summaries concise and engineering-focused
-- Ensure consistency between risk interpretation and recommendations
+- Output ONLY valid JSON. Do not include markdown, code fences, or commentary.
+- "summary" MUST contain EXACTLY 6 items. No more and no fewer.
+- "recommendations" MUST contain EXACTLY 5 items. No more and no fewer.
+- Every recommendation MUST include a valid priority, title, and description.
+- Recommendations MUST be specific, actionable, and relevant to the assessed building and environmental conditions.
+- Do not invent unsupported structural or environmental facts.
+- Keep the 6 key findings concise and engineering-focused.
+- Ensure consistency between the key findings, risk interpretation, and recommendations.
+- The priority should reflect urgency:
+  - "red": immediate or critical action
+  - "orange": high-priority action
+  - "yellow": moderate-priority improvement
+  - "green": lower-priority preparedness or maintenance action
 """
 
 

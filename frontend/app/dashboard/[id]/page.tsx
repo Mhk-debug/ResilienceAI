@@ -4,7 +4,6 @@ import type { AssessmentIDResponse } from "@/app/types";
 import { LocalStorageManager } from "@/components/local-storage-manager";
 import {
     calculateRiskScore,
-    getRiskColorClasses,
     getRiskLevel,
 } from "@/utils/risk";
 import { formatTimeAgo } from "@/utils/tools";
@@ -16,6 +15,10 @@ import AssessmentNotFound from "./AssessmentNotFound";
 import { Calendar } from "lucide-react";
 import BuildingProfileCard from "./BuildingProfileCard";
 import RiskGauge from "./RiskGauge";
+import RiskInterpretation from "./RiskInterpretation";
+import ContributingFactors from "./ContributingFactors";
+import AiInsights from "./AiInsights";
+import SupportingEvidence from "./SupportingEvidence";
 
 function DashboardPage() {
     const params = useParams();
@@ -75,7 +78,6 @@ function DashboardPage() {
         : 0;
 
     const computedRiskLevel = getRiskLevel(computedRiskScore);
-    const riskColors = getRiskColorClasses(computedRiskLevel);
 
     if (isLoading) {
         return <AssessmentLoading />;
@@ -100,7 +102,7 @@ function DashboardPage() {
                     <div className="flex flex-wrap items-center justify-between gap-4">
                         <div className="space-y-1">
                             <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                                Civil Engineering GIS Suite
+                                Code Trio | AI innovation 2026
                             </span>
                             <h1 className="text-2xl md:text-3xl font-display font-semibold tracking-tight text-slate-900 leading-tight">
                                 ResilienceAI Dashboard
@@ -143,10 +145,25 @@ function DashboardPage() {
                             <RiskGauge
                                 score={computedRiskScore}
                                 level={computedRiskLevel}
+                                resilienceScore={assessment.resilience_score}
+                                hazardScore={assessment.hazard_score}
                             />
                         </div>
                     </div>
                 </section>
+
+                <div className="space-y-12 pb-12">
+                    <RiskInterpretation llm={assessment.llm} />
+
+                    <ContributingFactors
+                        environmentalContext={assessment.hazard.environmental_context}
+                        indicators={assessment.hazard.indicators}
+                    />
+
+                    <AiInsights llm={assessment.llm} />
+
+                    <SupportingEvidence events={assessment.hazard.events} />
+                </div>
             </div>
         </div>
     );
