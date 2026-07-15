@@ -79,7 +79,7 @@ export default function SupportingEvidence({ events }: SupportingEvidenceProps) 
                                             </div>
                                         </td>
                                         <td className="px-4 py-3">
-                                            <span className="text-slate-700 truncate block max-w-[200px] sm:max-w-xs md:max-w-md" title={event.place}>
+                                            <span className="text-slate-700 truncate block max-w-50 sm:max-w-xs md:max-w-md" title={event.place}>
                                                 {event.place}
                                             </span>
                                         </td>
