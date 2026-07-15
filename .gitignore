@@ -38,9 +38,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .vscode
-<<<<<<< HEAD
-__pycache__/
-=======
 .pytest_cache
 __pycache__/
->>>>>>> b33ec0e854a14c42fe6cec900446ae24d7afecb4
+data/csv_building_structure.csv
+data/csv_building_damage_assessment.csv
