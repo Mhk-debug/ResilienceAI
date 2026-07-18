@@ -1,8 +1,10 @@
 import asyncio
+import json
 import logging
 import traceback
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from database import get_db, Assessment
@@ -93,64 +95,192 @@ async def save_assessment(request: SaveAssessmentRequest, db: Session = Depends(
         raise HTTPException(status_code=500, detail="Unexpected internal server error.")
 
 
-@router.post("/process", status_code=status.HTTP_201_CREATED, summary="Orchestrate full resilience evaluation and save to database")
-async def process_assessment(payload: AssessmentRequest, request: Request, db: Session = Depends(get_db)):
-    try:
-        # 1. Create Inputs
-        hazard_input_payload = HazardInput(
-            latitude=payload.latitude,
-            longitude=payload.longitude,
-            search_radius_km=100,
-            historical_years=50,
-            minimum_magnitude=4.5,
-        )
+@router.post(
+    "/process",
+    summary="Orchestrate full resilience evaluation and stream progress"
+)
+async def process_assessment(
+    payload: AssessmentRequest,
+    request: Request,
+    db: Session = Depends(get_db)
+):
 
-        building_fields = payload.model_dump(exclude={"latitude", "longitude"})
-        building_input_payload = BuildingInput(**building_fields)
+    def sse_event(data: dict) -> str:
+        return f"data: {json.dumps(data)}\n\n"
 
-        # 2. Run engines concurrently via internal Python execution (No HTTP overhead)
-        building_task = asyncio.to_thread(
-            calculate_pure_resilience, 
-            payload=building_input_payload, 
-            request=request
-        )
-        
-        hazard_task = asyncio.create_task(
-            calculate_hazard_route(inputs=hazard_input_payload)
-        )
+    async def assessment_generator():
 
-        building_data, hazard_data = await asyncio.gather(building_task, hazard_task)
+        try:
+            # ---------------------------------------------------------
+            # INITIALIZATION
+            # ---------------------------------------------------------
 
-        building_json = building_data.model_dump(mode="json")
-        hazard_json = hazard_data.model_dump(mode="json")
+            yield sse_event({
+                "type": "stage_started",
+                "stage": "initializing",
+                "status": "Preparing your assessment..."
+            })
 
-        # 3. LLM analysis via direct service invocation
-        llm_input = LLMAnalysisInput(
-            building_context=building_json["building_llm_context"],
-            environmental_context=hazard_json["environmental_context"]
-        )
-        
-        # Assuming analyze is synchronous, wrap in to_thread
-        llm_data = await asyncio.to_thread(llm_service.analyze, llm_input)
+            hazard_input_payload = HazardInput(
+                latitude=payload.latitude,
+                longitude=payload.longitude,
+                search_radius_km=100,
+                historical_years=50,
+                minimum_magnitude=4.5,
+            )
 
-        # 4. Save to database via internal function call
-        save_payload = SaveAssessmentRequest(
-            profile=building_input_payload,
-            building=building_data,
-            hazard=hazard_data,
-            llm=llm_data
-        )
-        
-        final_data = await save_assessment(request=save_payload, db=db)
+            building_fields = payload.model_dump(
+                exclude={"latitude", "longitude"}
+            )
 
-        return {
-            "success": True,
-            "assessment_id": final_data.get("assessment_id")
+            building_input_payload = BuildingInput(
+                **building_fields
+            )
+
+            yield sse_event({
+                "type": "stage_completed",
+                "stage": "initializing"
+            })
+
+            # ---------------------------------------------------------
+            # START PARALLEL ANALYSIS
+            # ---------------------------------------------------------
+
+            yield sse_event({
+                "type": "stage_started",
+                "stage": "resilience",
+                "status": "Assessing building resilience..."
+            })
+
+            yield sse_event({
+                "type": "stage_started",
+                "stage": "hazard",
+                "status": "Running environmental hazard engine..."
+            })
+
+            building_task = asyncio.to_thread(
+                calculate_pure_resilience,
+                payload=building_input_payload,
+                request=request
+            )
+
+            hazard_task = asyncio.create_task(
+                calculate_hazard_route(
+                    inputs=hazard_input_payload
+                )
+            )
+
+            building_data, hazard_data = await asyncio.gather(
+                building_task,
+                hazard_task
+            )
+
+            # ---------------------------------------------------------
+            # BOTH PARALLEL TASKS COMPLETE
+            # ---------------------------------------------------------
+
+            yield sse_event({
+                "type": "stage_completed",
+                "stage": "resilience"
+            })
+
+            yield sse_event({
+                "type": "stage_completed",
+                "stage": "hazard"
+            })
+
+            # ---------------------------------------------------------
+            # LLM ANALYSIS
+            # ---------------------------------------------------------
+
+            yield sse_event({
+                "type": "stage_started",
+                "stage": "llm",
+                "status": "Generating AI feedback..."
+            })
+
+            building_json = building_data.model_dump(
+                mode="json"
+            )
+
+            hazard_json = hazard_data.model_dump(
+                mode="json"
+            )
+
+            llm_input = LLMAnalysisInput(
+                building_context=building_json[
+                    "building_llm_context"
+                ],
+                environmental_context=hazard_json[
+                    "environmental_context"
+                ]
+            )
+
+            llm_data = await asyncio.to_thread(
+                llm_service.analyze,
+                llm_input
+            )
+
+            yield sse_event({
+                "type": "stage_completed",
+                "stage": "llm"
+            })
+
+            # ---------------------------------------------------------
+            # SAVE TO DATABASE
+            # ---------------------------------------------------------
+
+            yield sse_event({
+                "type": "stage_started",
+                "stage": "saving",
+                "status": "Saving your assessment..."
+            })
+
+            save_payload = SaveAssessmentRequest(
+                profile=building_input_payload,
+                building=building_data,
+                hazard=hazard_data,
+                llm=llm_data
+            )
+
+            final_data = await save_assessment(
+                request=save_payload,
+                db=db
+            )
+
+            yield sse_event({
+                "type": "stage_completed",
+                "stage": "saving"
+            })
+
+            # ---------------------------------------------------------
+            # COMPLETE
+            # ---------------------------------------------------------
+
+            yield sse_event({
+                "type": "complete",
+                "assessment_id": final_data.get(
+                    "assessment_id"
+                )
+            })
+
+        except Exception as e:
+
+            traceback.print_exc()
+
+            yield sse_event({
+                "type": "error",
+                "detail": str(e)
+            })
+
+    return StreamingResponse(
+        assessment_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
         }
-
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+    )
 
 @router.get(
     "/{assessment_id}",

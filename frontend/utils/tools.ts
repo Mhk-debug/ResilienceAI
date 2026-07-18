@@ -29,7 +29,7 @@ export function formatTimeAgo(dateTime: Date) {
     return "just now";
 }
 
-async function getPlaceName(lat: number, lon: number) {
+export async function getPlaceName(lat: number, lon: number) {
     const response = await fetch(
         `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`
     );
@@ -37,4 +37,12 @@ async function getPlaceName(lat: number, lon: number) {
     const data = await response.json();
 
     return data.display_name;
+}
+
+export function normalizeLatitude(latitude: number): number {
+    return Math.max(-90, Math.min(90, latitude));
+}
+
+export function normalizeLongitude(longitude: number): number {
+    return ((((longitude + 180) % 360) + 360) % 360) - 180;
 }

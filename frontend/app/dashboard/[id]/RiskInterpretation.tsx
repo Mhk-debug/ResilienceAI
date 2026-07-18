@@ -11,33 +11,47 @@ const interpretationFields = [
         key: "structural_assessment" as const,
         label: "Structural Assessment",
         icon: Building2,
-        accent: "border-blue-200",
-        iconColor: "text-blue-500",
-        labelColor: "text-blue-700",
     },
     {
         key: "environmental_assessment" as const,
         label: "Environmental Assessment",
         icon: Globe2,
-        accent: "border-emerald-200",
-        iconColor: "text-emerald-500",
-        labelColor: "text-emerald-700",
     },
     {
         key: "overall_reasoning" as const,
         label: "Overall Reasoning",
         icon: BrainCircuit,
-        accent: "border-violet-200",
-        iconColor: "text-violet-500",
-        labelColor: "text-violet-700",
     },
 ] as const;
+
+const styles = {
+    structural_assessment: {
+        accent: "border-l-amber-600",
+        iconBg: "bg-amber-100",
+        iconColor: "text-amber-700",
+        labelColor: "text-amber-800",
+    },
+    environmental_assessment: {
+        accent: "border-l-emerald-600",
+        iconBg: "bg-emerald-100",
+        iconColor: "text-emerald-700",
+        labelColor: "text-emerald-800",
+    },
+    overall_reasoning: {
+        accent: "border-l-indigo-600",
+        iconBg: "bg-indigo-100",
+        iconColor: "text-indigo-700",
+        labelColor: "text-indigo-800",
+    },
+};
 
 export default function RiskInterpretation({ llm }: RiskInterpretationProps) {
     const ri = llm.risk_interpretation;
     const hasInterpretation =
         ri &&
-        (ri.structural_assessment || ri.environmental_assessment || ri.overall_reasoning);
+        (ri.structural_assessment ||
+            ri.environmental_assessment ||
+            ri.overall_reasoning);
 
     if (!hasInterpretation) return null;
 
@@ -46,28 +60,61 @@ export default function RiskInterpretation({ llm }: RiskInterpretationProps) {
             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest px-1">
                 Risk Interpretation
             </h3>
-            
+
             {/* New top-level unpadded flex container for the cards */}
-            <div className="flex flex-col md:flex-row gap-4 w-full">
-                {interpretationFields.map(({ key, label, icon: Icon, accent, iconColor, labelColor }) => {
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
+                {interpretationFields.map(({ key, label, icon: Icon }) => {
                     const text = ri[key];
                     if (!text) return null;
+
+                    const style =
+                        styles[key as keyof typeof styles] ?? styles["overall_reasoning"];
 
                     return (
                         <div
                             key={key}
                             className={cn(
-                                "flex-1 bg-white rounded-xl border p-5 flex flex-col gap-2.5",
-                                accent
+                                "min-w-0 w-full",
+                                "bg-white rounded-xl",
+                                "border border-slate-200",
+                                "border-l-4",
+                                style.accent,
+                                "p-4 sm:p-5",
+                                "flex flex-col",
+                                "shadow-sm",
+                                "transition-shadow duration-200",
+                                "hover:shadow-md",
                             )}
                         >
-                            <div className={cn("flex items-center gap-2 border-b pb-2", accent)}>
-                                <Icon className={cn("w-4 h-4 shrink-0", iconColor)} />
-                                <span className={cn("text-xs font-semibold uppercase tracking-wider", labelColor)}>
+                            {/* Card Header */}
+                            <div className="flex items-center gap-3 pb-3 border-b border-slate-200">
+                                <div
+                                    className={cn(
+                                        "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg",
+                                        style.iconBg,
+                                        style.iconColor,
+                                    )}
+                                >
+                                    <Icon
+                                        className="h-5 w-5"
+                                        strokeWidth={2.25}
+                                    />
+                                </div>
+
+                                <h3
+                                    className={cn(
+                                        "min-w-0",
+                                        "text-xs sm:text-sm",
+                                        "font-bold uppercase tracking-wider",
+                                        style.labelColor,
+                                    )}
+                                >
                                     {label}
-                                </span>
+                                </h3>
                             </div>
-                            <p className="text-sm text-slate-700 leading-relaxed">
+
+                            {/* Interpretation */}
+                            <p className="mt-4 text-sm leading-6 text-slate-800">
                                 {text}
                             </p>
                         </div>

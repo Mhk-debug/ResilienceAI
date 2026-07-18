@@ -2,10 +2,7 @@
 
 import type { AssessmentIDResponse } from "@/app/types";
 import { LocalStorageManager } from "@/components/local-storage-manager";
-import {
-    calculateRiskScore,
-    getRiskLevel,
-} from "@/utils/risk";
+import { calculateRiskScore, getRiskLevel } from "@/utils/risk";
 import { formatTimeAgo } from "@/utils/tools";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -19,6 +16,7 @@ import RiskInterpretation from "./RiskInterpretation";
 import ContributingFactors from "./ContributingFactors";
 import AiInsights from "./AiInsights";
 import SupportingEvidence from "./SupportingEvidence";
+import Footer from "@/components/footer";
 
 function DashboardPage() {
     const params = useParams();
@@ -97,7 +95,7 @@ function DashboardPage() {
         <div className="min-h-screen bg-slate-100 pb-20 selection:bg-blue-600 selection:text-white font-sans">
             <LocalStorageManager id={assessment.id} />
 
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 space-y-12">
+            <div className="max-w-7xl mx-auto px-0 xs:px-4 sm:px-6 lg:px-8 mt-8 space-y-12">
                 <div className="w-full border-b border-slate-200 pb-5 space-y-2">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                         <div className="space-y-1">
@@ -128,7 +126,6 @@ function DashboardPage() {
                     </div>
                 </div>
                 <section id="building-overview-section" className="space-y-4">
-
                     <div className="grid grid-cols-1 lg:grid-cols-15 gap-8 items-stretch">
                         {/* Left Column - Building Profile Card */}
                         <div className="lg:col-span-8">
@@ -156,7 +153,9 @@ function DashboardPage() {
                     <RiskInterpretation llm={assessment.llm} />
 
                     <ContributingFactors
-                        environmentalContext={assessment.hazard.environmental_context}
+                        environmentalContext={
+                            assessment.hazard.environmental_context
+                        }
                         indicators={assessment.hazard.indicators}
                     />
 
@@ -164,6 +163,8 @@ function DashboardPage() {
 
                     <SupportingEvidence events={assessment.hazard.events} />
                 </div>
+
+                <Footer />
             </div>
         </div>
     );

@@ -18,7 +18,7 @@ function Header() {
 
             <div className="flex items-center gap-2 rounded-full border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1.5">
                 <span className="text-xs font-semibold text-primary-foreground/90">
-                    Built By: Min Hein Ko
+                    AI Model Active
                 </span>
             </div>
         </header>
