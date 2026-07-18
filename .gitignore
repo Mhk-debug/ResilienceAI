@@ -41,3 +41,6 @@ next-env.d.ts
 .pytest_cache
 __pycache__/
 bash.exe.stackdump
+data/csv_building_structure.csv
+data/csv_building_damage_assessment.csv
+data/resilence_dataset_1.csv
