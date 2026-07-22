@@ -236,7 +236,7 @@ export default function ContributingFactors({
                             <div className="space-y-3">
                                 <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
                                     <span className="max-w-[70%] text-sm font-medium text-slate-700">
-                                        Peak Ground Accel (PGA)
+                                        Peak Historical PGA 
                                     </span>
 
                                     <span className="text-right text-sm font-bold text-slate-900">
@@ -246,7 +246,7 @@ export default function ContributingFactors({
 
                                 <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
                                     <span className="max-w-[70%] text-sm font-medium text-slate-700">
-                                        Expected Intensity (MMI)
+                                        Peak Historical MMI
                                     </span>
 
                                     <span className="text-right text-sm font-bold text-slate-900">

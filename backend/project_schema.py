@@ -127,7 +127,7 @@ class LLMAnalysisInput(BaseModel):
 
 
 class LLMRecommendation(BaseModel):
-    priority: str  # "red" | "yellow" | "blue"
+    priority: str 
     title: str
     description: str
 
