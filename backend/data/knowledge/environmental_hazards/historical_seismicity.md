@@ -11,14 +11,19 @@ source:
   supplementary:
     - title: "Kagan, Y.Y. 'Statistical Distributions of Earthquake Numbers: Consequences of the Branching Process.' GJI, 2010."
     - title: "Woessner, J., et al. 'The 2013 European Seismic Hazard Model (ESHM13).' ETH Zurich, 2015."
-
+applies_when:
+  min_magnitude: 4.5
+  search_radius_km: 100
+  historical_years: 50
 ---
 
 # Historical Seismicity and Recurrence Analysis
 
 Historical earthquake records are the foundation of probabilistic seismic hazard analysis (PSHA). This document explains how the hazard engine uses historical data.
 
-## Catalog Requirements
+## Building Implications
+
+### Catalog Requirements
 
 | Requirement | This Project | Standard Practice |
 |-------------|--------------|-------------------|
@@ -126,6 +131,7 @@ Used in `summary_sentences`:
 - 2025 Sagaing (M7.7) — Central Sagaing Fault
 
 ## Source
+
 - USGS Earthquake Catalog (ComCat) — Primary data source for hazard engine
 - ISC Bulletin — Supplementary for pre-2000 events
 - **Myanmar**: Hurukawa, N., et al. "Seismicity and Seismic Hazard in Myanmar." J. Seismol., 2014.

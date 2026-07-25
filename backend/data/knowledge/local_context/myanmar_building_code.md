@@ -23,7 +23,9 @@ applies_when:
 
 The Myanmar National Building Code (MNBC) is the primary regulatory framework for seismic design in Myanmar. The 2016 edition (updated 2019) is the current legal standard, though enforcement varies.
 
-## Code Structure (Seismic-Relevant Parts)
+## Building Implications
+
+### Code Structure (Seismic-Relevant Parts)
 
 | Part | Title | Seismic Relevance |
 |------|-------|-------------------|
@@ -35,7 +37,7 @@ The Myanmar National Building Code (MNBC) is the primary regulatory framework fo
 | **Part 9** | Masonry Structures | URM, confined masonry (Ch. 9.3) |
 | **Part 10** | Timber/Bamboo | Traditional construction (Ch. 10.2) |
 
-## Seismic Design Philosophy (Part 6)
+### Seismic Design Philosophy (Part 6)
 
 | Concept | MNBC Approach |
 |---------|---------------|
@@ -45,7 +47,7 @@ The Myanmar National Building Code (MNBC) is the primary regulatory framework fo
 | **MCE return period** | 2,475 years (2% in 50 years) — for essential facilities |
 | **Importance factors** | I = 1.0 (ordinary), 1.25 (essential), 1.5 (critical) |
 
-## Seismic Zoning Map (MNBC 2016)
+### Seismic Zoning Map (MNBC 2016)
 
 | Zone | Zone Factor (Z) | Regions |
 |------|----------------|---------|
@@ -56,7 +58,7 @@ The Myanmar National Building Code (MNBC) is the primary regulatory framework fo
 
 **Yangon**: Zone 2 (Z=0.16) **but** soil amplification raises effective hazard significantly.
 
-## Site Classification (MNBC Table 6.2 / NEHRP)
+### Site Classification (MNBC Table 6.2 / NEHRP)
 
 | Class | Description | Vs30 (m/s) | Amplification Factor (Fa, Fv) |
 |-------|-------------|------------|-------------------------------|
@@ -69,7 +71,7 @@ The Myanmar National Building Code (MNBC) is the primary regulatory framework fo
 
 **Yangon downtown = Class E** → Requires site-specific study for buildings >3 stories or essential facilities.
 
-## Design Base Shear (Equivalent Lateral Force)
+### Design Base Shear (Equivalent Lateral Force)
 
 ```
 V = (Z * I * C * W) / R
@@ -90,9 +92,9 @@ Where:
 | **RC Shear Wall** | 6 | Mid/high-rise |
 | **URM Bearing Wall** | 1.5–2 | Existing only; not for new |
 
-## Key Ductile Detailing Requirements (Part 6, 7, 8)
+### Key Ductile Detailing Requirements (Part 6, 7, 8)
 
-### RC Moment Frames (Special)
+#### RC Moment Frames (Special)
 | Requirement | MNBC 2016/2019 |
 |-------------|----------------|
 | **Column confinement** | Hoops @ d/4 spacing in plastic hinge zone (2h from joint) |
@@ -101,7 +103,7 @@ Where:
 | **Beam-column joint** | Joint shear check per §6.7; transverse reinforcement |
 | **Strong column/weak beam** | ΣMcol ≥ 1.2 ΣMbeam at joint |
 
-### Masonry (Confined)
+#### Masonry (Confined)
 | Requirement | MNBC 2016 |
 |-------------|-----------|
 | **Confining elements** | RC tie columns + beams at wall intersections |
@@ -109,14 +111,14 @@ Where:
 | **Tie beam spacing** | ≤ 3m vertically |
 | **Wall reinforcement** | Horizontal @ 400mm; vertical @ 600mm |
 
-### Existing Building Evaluation (MNBC Appendix / ASCE 41)
+#### Existing Building Evaluation (MNBC Appendix / ASCE 41)
 | Tier | Method | Use Case |
 |------|--------|----------|
 | **Tier 1** | Checklists | Rapid screening |
 | **Tier 2** | Simplified analysis (linear) | Deficiency identification |
 | **Tier 3** | Detailed analysis (nonlinear) | Final retrofit design |
 
-## Enforcement Reality (2026 Context)
+### Enforcement Reality (2026 Context)
 
 | Aspect | Status |
 |--------|--------|
@@ -130,6 +132,7 @@ Where:
 **Competition context**: The AI Innovation Competition judges will expect you to reference MNBC. Cite specific sections (e.g., "MNBC Part 6 §6.5.2") when making regulatory recommendations.
 
 ## Source
+
 - Ministry of Construction, Myanmar. "Myanmar National Building Code 2016 (Part 6: Seismic Design)." 2016.
 - Ministry of Construction, Myanmar. "Myanmar National Building Code 2019 Update." 2019.
 - Myanmar Engineering Council (MEC). "Guidelines for Seismic Design per MNBC." 2020.

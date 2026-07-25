@@ -21,19 +21,21 @@ source:
 
 The danger isn't over when the shaking stops. **Aftershocks, fires, utility damage, and unstable structures** cause more casualties than the main shock in many earthquakes.
 
-## Immediate Actions (First Minutes to Hours)
+## Building Implications
 
-### 1. **Expect Aftershocks**
+### Immediate Actions (First Minutes to Hours)
+
+#### 1. **Expect Aftershocks**
 - **Rule**: Aftershocks can be as large as the main shock (rare) or nearly as large
 - **Action**: Stay in safe location; **Drop, Cover, Hold On** for each aftershock
 - **Duration**: Can continue for days, weeks, months; largest usually within first 24–48 hours
 
-### 2. **Check for Injuries**
+#### 2. **Check for Injuries**
 - **First**: Check yourself, then others
 - **Do not move seriously injured** unless in immediate danger
 - **Call emergency services** for life-threatening injuries (text if lines busy)
 
-### 3. **Check for Hazards — The "Four Killers"**
+#### 3. **Check for Hazards — The "Four Killers"**
 
 | Hazard | Detection | Action |
 |--------|-----------|--------|
@@ -42,7 +44,7 @@ The danger isn't over when the shaking stops. **Aftershocks, fires, utility dama
 | **Water** | Flooding, rushing water sound | Shut off at main valve; prevents further damage + electrocution |
 | **Structural** | New cracks, bulging walls, leaning, separated joints | **Evacuate**; do not re-enter until inspected |
 
-### 4. **Fire — Most Common Post-EQ Killer**
+#### 4. **Fire — Most Common Post-EQ Killer**
 - Small fires: use fire extinguisher (PASS: Pull, Aim, Squeeze, Sweep)
 - Large fires: **evacuate**; close doors to contain; call fire department
 - **Do not use water on electrical/gas fires**
@@ -107,6 +109,7 @@ The danger isn't over when the shaking stops. **Aftershocks, fires, utility dama
 | **Resilience** | 1–5+ years | Code upgrades, retrofit programs, community planning |
 
 ## Source
+
 - FEMA. "After an Earthquake." Ready.gov, 2018.
 - ATC-20-1. "Field Manual: Postearthquake Safety Evaluation of Buildings." 2005.
 - American Red Cross. "After an Earthquake." 2022.

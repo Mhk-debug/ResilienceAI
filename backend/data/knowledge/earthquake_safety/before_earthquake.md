@@ -20,7 +20,9 @@ source:
 
 The most effective earthquake safety actions happen **before** the shaking starts. Preparation reduces injuries, saves lives, and speeds recovery.
 
-## 1. Secure Your Space (Non-Structural Mitigation)
+## Building Implications
+
+### 1. Secure Your Space (Non-Structural Mitigation)
 
 | Priority | Action | Why It Matters |
 |----------|--------|----------------|
@@ -32,7 +34,7 @@ The most effective earthquake safety actions happen **before** the shaking start
 | **Medium** | Latch cabinet doors | Keeps contents from becoming projectiles |
 | **Low** | Store flammable liquids away from ignition sources | Reduces post-EQ fire |
 
-## 2. Create an Emergency Plan
+### 2. Create an Emergency Plan
 
 **Family Communication Plan:**
 - Out-of-area contact (everyone texts/calls same person)
@@ -45,7 +47,7 @@ The most effective earthquake safety actions happen **before** the shaking start
 - Keep flashlight + sturdy shoes by each bed
 - Practice "Drop, Cover, Hold On" — 2x/year minimum
 
-## 3. Build an Emergency Kit (72-Hour Minimum)
+### 3. Build an Emergency Kit (72-Hour Minimum)
 
 | Category | Items |
 |----------|-------|
@@ -58,7 +60,7 @@ The most effective earthquake safety actions happen **before** the shaking start
 
 **Location**: Keep at home, in car, and at work/school.
 
-## 3. Structural Preparedness (Homeowner Actions)
+### 4. Structural Preparedness (Homeowner Actions)
 
 | Action | When | Cost | Effectiveness |
 |--------|------|------|---------------|
@@ -68,7 +70,7 @@ The most effective earthquake safety actions happen **before** the shaking start
 | **Mobile home tie-downs** | All manufactured homes | $2,000–4,000 | Prevents rolling off foundation |
 | **Gas shutoff valve** (automatic seismic) | All homes with gas | $300–600 | Prevents post-EQ fires |
 
-## 4. Community Preparedness
+### 5. Community Preparedness
 
 - **Register for ShakeAlert/Earthquake Early Warning** (Myanmar: Myanmar Earthquake Committee alerts)
 - **Participate in Great ShakeOut drill** (annually, 3rd Thursday Oct)
@@ -85,7 +87,15 @@ The most effective earthquake safety actions happen **before** the shaking start
 | **Secure Buddha images/shrines** | Heavy religious items are common falling hazards |
 | **Bamboo/timber house bracing** | Traditional construction — add diagonal bracing, anchor posts |
 
+## Building Implications for Engineers/Planners
+
+- Non-structural mitigation (anchoring, bracing) is often 10-100x cheaper than structural retrofit
+- Building codes should require non-structural anchorage for new construction
+- Existing building evaluations (ATC-14, FEMA P-154) should include non-structural assessment
+- Public awareness campaigns should emphasize "secure your space" alongside structural safety
+
 ## Source
+
 - FEMA. "Earthquake Safety Checklist." FEMA P-526, 2018.
 - Ready.gov. "Earthquakes." https://www.ready.gov/earthquakes
 - American Red Cross. "Earthquake Safety." https://www.redcross.org/

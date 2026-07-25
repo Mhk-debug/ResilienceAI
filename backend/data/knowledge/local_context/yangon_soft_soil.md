@@ -13,6 +13,7 @@ source:
       url: "https://doi.org/10.1080/13632469.2017.1324567"
     - title: "Myanmar National Building Code (2016, 2019) — Site Classification"
       url: "https://www.moc.gov.mm/"
+
 applies_when:
   region: ["Yangon", "Ayeyarwady Delta", "Bago", "Thanlyin", "Syriam"]
 ---
@@ -21,7 +22,9 @@ applies_when:
 
 Yangon sits on the **Irrawaddy (Ayeyarwady) Delta** — a thick sequence of young alluvial sediments overlying bedrock. This geology creates severe site amplification and liquefaction risk, making soil effects the dominant hazard factor for Yangon (more than direct fault proximity).
 
-## Geology
+## Building Implications
+
+### Geology
 
 | Layer | Depth | Description | Vs30 (m/s) |
 |-------|-------|-------------|------------|
@@ -32,9 +35,9 @@ Yangon sits on the **Irrawaddy (Ayeyarwady) Delta** — a thick sequence of youn
 
 **Typical Vs30 in central Yangon**: 150–250 m/s → **NEHRP Class E (Soft Clay)**
 
-## Amplification Effects
+### Amplification Effects
 
-### 1. **PGA Amplification**
+#### 1. PGA Amplification
 | Soil Class | Bedrock PGA | Surface PGA | Factor |
 |------------|-------------|-------------|--------|
 | Rock (A/B) | 0.20g | 0.20–0.24g | 1.0–1.2 |
@@ -42,17 +45,17 @@ Yangon sits on the **Irrawaddy (Ayeyarwady) Delta** — a thick sequence of youn
 | Class D | 0.20g | 0.36–0.50g | 1.8–2.5 |
 | **Class E (Yangon)** | **0.20g** | **0.50–1.00g** | **2.5–5.0** |
 
-### 2. **Period-Dependent Amplification**
+#### 2. Period-Dependent Amplification
 - **Short period (0.1–0.3s)**: 2–3x (affects low-rise, stiff buildings)
 - **Mid period (0.5–1.5s)**: **4–6x** (affects 5–15 story buildings — resonance with typical RC frame periods)
 - **Long period (2–5s)**: 3–4x (affects tall buildings 20+ stories)
 
-### 3. **Basin Effect (Irrawaddy Delta)**
+#### 3. Basin Effect (Irrawaddy Delta)
 - Deep sedimentary basin traps surface waves
 - **Duration**: 2–3x longer than rock sites
 - **Late-arriving surface waves** cause cumulative damage to tall buildings
 
-## Liquefaction Susceptibility
+### Liquefaction Susceptibility
 
 | Area | Susceptibility | Evidence |
 |------|----------------|----------|
@@ -61,7 +64,7 @@ Yangon sits on the **Irrawaddy (Ayeyarwady) Delta** — a thick sequence of youn
 | **New Townships (Hlaing Tharyar, Shwepyitha)** | High | Rapid development on soft fill |
 | **Airport (Mingaladon)** | Moderate | Older alluvium, deeper water table |
 
-## Hazard Engine Integration (This Project)
+### Hazard Engine Integration (This Project)
 
 The hazard engine (`services/hazard_engine/soil.py`) uses **SoilGrids 250m** to estimate:
 - `soil_class` (A–E) → NEHRP class
@@ -106,7 +109,7 @@ The hazard engine (`services/hazard_engine/soil.py`) uses **SoilGrids 250m** to 
 | Provision | Requirement for Yangon (Class E) |
 |-----------|----------------------------------|
 | **Site Class** | E (Vs30 < 180 m/s) — requires site-specific study for >3 stories |
-| **Seismic Zone** | Zone 3 (Sagaing Fault influence) + Local amplification |
+| **Seismic Zone** | Zone 2 (Z=0.16) **but** soil amplification raises effective hazard significantly |
 | **Importance Factor** | 1.5 for essential facilities on Class E |
 | **Site-Specific Response** | **Required** for: >3 stories, essential facilities, irregular structures |
 | **Liquefaction Analysis** | Required for Class E sites with GW < 10m |

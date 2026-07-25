@@ -19,7 +19,9 @@ source:
 
 Regular maintenance and inspection are often overlooked but can prevent catastrophic failures at near-zero cost. This document covers the essential maintenance items that improve seismic resilience.
 
-## The Maintenance-Seismic Connection
+## Building Implications
+
+### The Maintenance-Seismic Connection
 
 Deferred maintenance degrades seismic capacity:
 - **Rusted connections** → brittle fracture instead of ductile yielding
@@ -42,13 +44,23 @@ Deferred maintenance degrades seismic capacity:
 
 ## Post-Earthquake Inspection (ATC-20)
 
-| Placard | Meaning | Action |
-|---------|---------|--------|
-| **Green (Inspected)** | No apparent hazard | Normal occupancy |
-| **Yellow (Restricted Use)** | Hazardous condition | Limited entry; repairs needed |
-| **Red (Unsafe)** | Imminent collapse danger | **Do not enter**; evacuate |
+### Red / Yellow / Green Tagging
 
-**Every building should have ATC-20 forms and trained personnel before an earthquake.**
+| Tag | Meaning | Action |
+|-----|---------|--------|
+| **GREEN (Inspected)** | No apparent structural hazard | Safe to occupy; monitor for changes |
+| **YELLOW (Restricted Use)** | Damage limits safe occupancy | **Do not occupy** except for essential retrieval; entry at own risk |
+| **RED (Unsafe)** | Severe damage; collapse risk | **Do not enter**; demolition likely |
+
+### Quick Visual Inspection Triggers (Red Flags for YELLOW/RED)
+
+| Exterior | Interior | Foundation |
+|----------|----------|------------|
+| Leaning walls/chimneys | New cracks >1/4" (6mm) | New cracks in foundation |
+| Separation at corners | Sticking doors/windows (frame rack) | Soil movement/liquefaction |
+| Bulging walls | Ceiling/wall separation | House off foundation |
+| Falling parapades | Sloping floors | Cracked perimeter grade beam |
+| Diagonal stair-step cracks | Buckled/fallen plaster | Piers/columns damaged |
 
 ## Maintenance Priorities by Building Type
 
@@ -89,6 +101,7 @@ Deferred maintenance degrades seismic capacity:
 | Post-EQ rapid assessment | Reduces casualties by enabling safe re-entry |
 
 ## Source
+
 - FEMA P-1024 (2018) — "A Guide for Assessing the Seismic Performance of Existing Buildings"
 - ATC-20-1 (2005) — "Field Manual: Postearthquake Safety Evaluation of Buildings"
 - FEMA P-154 (2015) — Rapid Visual Screening (includes maintenance items)

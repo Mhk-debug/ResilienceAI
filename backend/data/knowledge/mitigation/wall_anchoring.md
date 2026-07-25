@@ -20,14 +20,16 @@ source:
 
 The most common cause of death in URM earthquakes is out-of-plane wall collapse due to missing wall-to-diaphragm anchors. This is also the **cheapest and most effective retrofit** for URM buildings.
 
-## The Problem
+## Building Implications
+
+### The Problem
 
 During shaking:
 1. Inertial forces act on walls perpendicular to their plane
 2. Without anchors, walls act as vertical cantilevers from foundation
 3. Top of wall displaces → wall rotates outward → roof/floor loses support → **progressive collapse**
 
-## Anchor Types (Per FEMA P-774 / NCMA TEK 14-10A)
+### Anchor Types (Per FEMA P-774 / NCMA TEK 14-10A)
 
 | Type | Description | Capacity | Cost | Use When |
 |------|-------------|----------|------|----------|
@@ -52,11 +54,11 @@ During shaking:
 1. **Locate** joist/truss positions from interior
 2. **Mark** anchor positions per spacing rules
 3. **Drill** 1/2"–5/8" hole through wall at joist bearing
-4. **Clean** hole (brush + compressed air)
-5. **Inject** epoxy (HIREA or equivalent)
-6. **Insert** threaded rod (ASTM A307 or A193 B7) to embed depth ≥ 8× diameter
-7. **Install** washer + nut on interior; tighten to 50% yield
-8. **Verify** embedment and alignment
+3. **Clean** hole (brush + compressed air)
+4. **Inject** epoxy (HIREA or equivalent)
+5. **Insert** threaded rod (ASTM A307 or A193 B7) to embed depth ≥ 8× diameter
+5. **Install** washer + nut on interior; tighten to 50% yield
+6. **Verify** embedment and alignment
 
 ## Myanmar Adaptation
 
@@ -79,7 +81,31 @@ During shaking:
 
 **Cost per m²**: ~3,350 MMK ($1.60) — **highest ROI retrofit available**
 
+## Building Implications
+
+- **URM bearing wall buildings**: Highest priority for anchors
+- **Non-structural**: Also secure parapets, chimneys, veneer
+- **Diaphragm**: Must have adequate cross-ties/continuity ties
+- **Foundation**: Anchors only work if wall is connected to foundation
+
+## Myanmar Adaptation
+
+| Constraint | Solution |
+|------------|----------|
+| No epoxy supply | Use cementitious grout + deformed bar (lower capacity, longer cure) |
+| No threaded rod | Use deformed rebar (Grade 40/60) with plate washer |
+| No through-access | Interior plate + bent bar hooked around joist |
+| Labor cost low | Community-based installation with engineer supervision |
+
+## Cost-Benefit
+
+| Annual Maintenance Budget | Risk Reduction |
+|---------------------------|----------------|
+| 0.5–1% of replacement value | Prevents 20–40% of avoidable seismic damage |
+| Post-EQ rapid assessment | Reduces casualties by enabling safe re-entry |
+
 ## Source
+
 - FEMA P-774 (2009) — "Unreinforced Masonry Buildings: Risk Reduction"
 - NCMA TEK 14-10A (2018) — "Anchorage of Masonry Walls to Diaphragms"
 - ASCE/SEI 41-23 §10.7 — Wall Anchorage Requirements

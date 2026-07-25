@@ -13,14 +13,17 @@ source:
       url: "https://www.nibs.org/bssc"
     - title: "Boore, J., et al. 'Site Amplification Factors for NGA Models.' PEER Report 2013/05."
       url: "https://peer.berkeley.edu/"
-
+applies_when:
+  soil_classes: ["D", "E", "F"]
 ---
 
 # Soil Amplification and Site Effects
 
 Local soil conditions can amplify ground motion by **2–10x** compared to rock, making site classification a critical component of seismic hazard assessment.
 
-## NEHRP / Vs30 Site Classification
+## Building Implications
+
+### NEHRP / Vs30 Site Classification
 
 | Class | Description | Vs30 (m/s) | Amplification Factor (Typical) |
 |-------|-------------|------------|-------------------------------|
@@ -94,7 +97,28 @@ pga_surface = pga_bedrock * amp_factor
 - **Liquefaction**: Documented in 1930 Bago (M7.3) and 2025 Sagaing (M7.7) earthquakes
 - **Basin effect**: Irrawaddy basin traps long-period energy → long-duration shaking for tall buildings
 
+## Building Implications
+
+| Building Type | Risk on Yangon Soil | Mitigation Priority |
+|---------------|---------------------|---------------------|
+| **Pre-1995 RC (non-ductile)** | **Extreme** | Immediate evaluation; retrofit or replace |
+| **URM / Adobe** | **Extreme** | Not recommended for occupancy |
+| **Engineered RC (post-2016 NBC)** | Moderate | Verify soil-structure interaction design |
+| **Steel moment frame** | Low–Moderate | Verify connection ductility |
+| **Base-isolated** | Very Low | Recommended for critical facilities |
+
+## Myanmar National Building Code (NBC) 2016/2019 Provisions
+
+| Provision | Requirement for Yangon (Class E) |
+|-----------|----------------------------------|
+| **Site Class** | E (Vs30 < 180 m/s) — requires site-specific study for >3 stories |
+| **Seismic Zone** | Zone 3 (Sagaing Fault influence) + Local amplification |
+| **Importance Factor** | 1.5 for essential facilities on Class E |
+| **Site-Specific Response** | **Required** for: >3 stories, essential facilities, irregular structures |
+| **Liquefaction Analysis** | Required for Class E sites with GW < 10m |
+
 ## Source
+
 - FEMA P-1050-1 (2020) — NEHRP Recommended Seismic Provisions, Chapter 11: Site Effects
 - USGS National Seismic Hazard Model (2023) — Site amplification methodology
 - Boore, J., et al. "Site Amplification Factors for NGA Models." PEER Report 2013/05.

@@ -21,7 +21,9 @@ applies_when:
 
 The Sagaing Fault is a **1,400 km right-lateral strike-slip fault** running north-south through central Myanmar. It accommodates the majority of the India-Sunda plate motion (~18–25 mm/yr) and is the single greatest seismic hazard for Myanmar's population centers.
 
-## Fault Characteristics
+## Building Implications
+
+### Fault Characteristics
 
 | Parameter | Value | Notes |
 |-----------|-------|-------|
@@ -32,7 +34,7 @@ The Sagaing Fault is a **1,400 km right-lateral strike-slip fault** running nort
 | **Recurrence (major)** | ~100–200 yr per segment | Paleoseismic data |
 | **Depth** | 10–20 km seismogenic | Shallow → strong shaking |
 
-## Segmentation (North to South)
+### Segmentation (North to South)
 
 | Segment | Length | Major Cities Nearby | Last Major EQ | Recurrence |
 |---------|--------|---------------------|---------------|------------|
@@ -41,7 +43,7 @@ The Sagaing Fault is a **1,400 km right-lateral strike-slip fault** running nort
 | **Southern (Bago-Yangon)** | ~300 km | Bago, Yangon (50 km west) | 1930 M7.3 (Bago) | 150–200 yr |
 | **Delta (offshore)** | ~150 km | — | — | — |
 
-## The 2025 Mw 7.7 Earthquake (Central Segment)
+### The 2025 Mw 7.7 Earthquake (Central Segment)
 
 | Parameter | Value |
 |-----------|-------|

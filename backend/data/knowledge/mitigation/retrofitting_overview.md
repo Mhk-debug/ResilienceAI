@@ -15,14 +15,15 @@ source:
     - title: "FEMA P-774: Unreinforced Masonry Buildings — Risk Reduction"
       organization: "FEMA"
       url: "https://www.fema.gov/sites/default/files/2020-07/fema_p-774.pdf"
-
 ---
 
 # Seismic Retrofitting Overview: Principles and Prioritization
 
 Retrofitting existing buildings for seismic resistance is one of the most cost-effective investments in disaster risk reduction. This document provides the engineering framework used to prioritize and design retrofits.
 
-## Retrofit Objectives (ASCE 41 Performance Levels)
+## Building Implications
+
+### Retrofit Objectives (ASCE 41 Performance Levels)
 
 | Performance Level | Structural Damage | Nonstructural Damage | Occupancy |
 |-------------------|-------------------|---------------------|-----------|
@@ -33,7 +34,7 @@ Retrofitting existing buildings for seismic resistance is one of the most cost-e
 
 **For existing buildings in Myanmar**: Target **Life Safety** minimum; **Immediate Occupancy** for critical facilities (hospitals, schools, emergency centers).
 
-## Retrofit Priority Framework
+### Retrofit Priority Framework
 
 Not all buildings need retrofit. Prioritize using this matrix:
 
@@ -44,7 +45,7 @@ Not all buildings need retrofit. Prioritize using this matrix:
 | **3 (Medium)** | URM/non-ductile RC + low occupancy OR moderate hazard | Retrofit during major renovation |
 | **4 (Low)** | Well-detailed RC/steel + any occupancy + low hazard | Monitor; retrofit if use changes |
 
-## Cost-Effectiveness (FEMA P-774 Data)
+### Cost-Effectiveness (FEMA P-774 Data)
 
 | Retrofit Type | Cost (% of replacement) | Risk Reduction | Best For |
 |---------------|------------------------|----------------|----------|
@@ -56,7 +57,7 @@ Not all buildings need retrofit. Prioritize using this matrix:
 
 **Rule of thumb**: If retrofit cost > 50% of replacement value → consider replacement instead.
 
-## Retrofit Design Process (ASCE 41)
+### Retrofit Design Process (ASCE 41)
 
 1. **Tier 1 Screening** — Rapid visual + checklist (FEMA P-154) → identify deficiencies
 2. **Tier 2 Evaluation** — Simplified analysis (linear static) → quantify demands vs capacities
@@ -64,7 +65,7 @@ Not all buildings need retrofit. Prioritize using this matrix:
 4. **Retrofit Design** — Select measures, detail connections, verify performance
 5. **Construction / Quality Assurance** — Special inspection per ASCE 41 Ch. 11
 
-## Common Deficiency → Retrofit Mapping
+### Common Deficiency → Retrofit Mapping
 
 | Deficiency (Tier 1) | Retrofit Measure | Typical Cost |
 |---------------------|------------------|--------------|
@@ -75,7 +76,7 @@ Not all buildings need retrofit. Prioritize using this matrix:
 | Unreinforced parapets | Brace or remove | $20–50/ft |
 | No foundation ties | Epoxy dowels + grade beam | $100–300/ft |
 
-## Myanmar-Specific Considerations
+### Myanmar-Specific Considerations
 
 | Challenge | Adaptation |
 |-----------|------------|
@@ -85,6 +86,7 @@ Not all buildings need retrofit. Prioritize using this matrix:
 | Cost constraints | Phased retrofit: life-safety first (anchors, braces), then damage reduction |
 
 ## Source
+
 - FEMA P-154 (2015) — Rapid Visual Screening
 - ASCE/SEI 41-23 — Seismic Evaluation and Retrofit of Existing Buildings
 - FEMA P-774 (2009) — Unreinforced Masonry Buildings

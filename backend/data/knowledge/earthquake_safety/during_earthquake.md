@@ -20,7 +20,9 @@ source:
 
 **The single most important action: DROP, COVER, AND HOLD ON.**
 
-## The Protocol (Seconds 0–60+)
+## Building Implications
+
+### The Protocol (Seconds 0–60+)
 
 | Step | Action | Duration | Details |
 |------|--------|----------|---------|
@@ -71,6 +73,7 @@ source:
 | **Driving in Yangon/Mandalay traffic** | Stay in vehicle; roads may crack, bridges may fail |
 
 ## Source
+
 - FEMA. "Drop, Cover, and Hold On." FEMA P-526, 2018.
 - ShakeOut. "How to Protect Yourself During an Earthquake." https://www.shakeout.org/
 - USGS. "What to Do During an Earthquake." https://earthquake.usgs.gov/prepare/during.php

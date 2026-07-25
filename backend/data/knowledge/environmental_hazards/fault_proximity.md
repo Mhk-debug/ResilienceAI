@@ -13,14 +13,17 @@ source:
       url: "http://www.myanmarec.org/"
     - title: "Wang, Y., et al. 'The 2025 Mw 7.7 Sagaing Fault Earthquake.' Nature Geoscience, 2025."
       url: "https://www.nature.com/naturegeoscience/"
-
+applies_when:
+  region: ["Sagaing", "Mandalay", "Nay Pyi Taw", "Bago", "Yangon (long-period)"]
 ---
 
 # Fault Proximity and Seismic Hazard
 
 Distance to active faults is one of the strongest predictors of peak ground motion. This document explains how fault distance affects hazard and provides Myanmar-specific context.
 
-## Distance Metrics
+## Building Implications
+
+### Distance Metrics
 
 | Metric | Definition | Use Case |
 |--------|------------|----------|
@@ -99,7 +102,17 @@ fault_types = {
 
 **Lesson for this project**: Buildings within 50 km of Sagaing Fault need enhanced design/detailing. Yangon (250 km away) experienced long-period amplification — soil + basin effect.
 
+## Building Implications
+
+| Distance from Fault | Building Requirement |
+|---------------------|---------------------|
+| **< 10 km** | Engineered RC with special detailing; avoid URM/adobe; base isolation for critical |
+| **10–30 km** | Engineered RC/steel; strict soft-story prohibition; enhanced detailing |
+| **30–100 km** | Standard code (Myanmar NBC 2016/2019) adequate for ordinary; enhanced for essential |
+| **> 100 km** | Standard code; focus on soil amplification (Yangon delta) |
+
 ## Source
+
 - USGS Earthquake Hazards Program — Fault Sources and Ground Motion Models
 - Wells, D.L., Coppersmith, K.J. "New Empirical Relationships among Magnitude, Rupture Length, Rupture Width, Rupture Area, and Surface Displacement." BSSA, 1994.
 - **Myanmar**: Wang, Y., et al. "The 2025 Mw 7.7 Sagaing Fault Earthquake: Rupture Process and Seismic Hazard Implications." Nature Geoscience, 2025.
