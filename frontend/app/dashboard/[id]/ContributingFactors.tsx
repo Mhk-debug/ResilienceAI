@@ -5,7 +5,6 @@ import {
     Map,
     Zap,
     MapPin,
-    TrendingUp,
     History,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -50,13 +49,6 @@ const items = [
         iconColor: "text-purple-700",
         iconBg: "bg-purple-100",
         accent: "border-l-purple-600",
-    },
-    {
-        icon: TrendingUp,
-        label: "Earthquake Recurrence",
-        iconColor: "text-indigo-700",
-        iconBg: "bg-indigo-100",
-        accent: "border-l-indigo-600",
     },
 ];
 

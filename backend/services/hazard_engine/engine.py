@@ -107,8 +107,7 @@ async def calculate_hazard(
     ]
     if len(events) > 0:
         summary_sentences.append(f"Historical earthquake record shows {len(events)} analyzed events of M{minimum_magnitude}+ within a {search_radius_km}km radius over the past {historical_years} years. The largest event registered magnitude M{catalog_stats['largest_historical_earthquake']} located {catalog_stats['closest_earthquake_km']}km away.")
-        if recurrence_data["recurrence_m6_years"]:
-            summary_sentences.append(f"Local Gutenberg-Richter b-value is calculated at {recurrence_data['b_value']:.2f}, indicating a statistical M6.0+ recurrence interval of approximately {recurrence_data['recurrence_m6_years']:.1f} years.")
+
     else:
         summary_sentences.append(f"No historical earthquake events of magnitude M{minimum_magnitude}+ were found within {search_radius_km}km of coordinates in the past {historical_years} years, indicating a highly stable geological crust.")
         

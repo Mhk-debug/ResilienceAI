@@ -10,13 +10,9 @@ from __future__ import annotations
 import os
 import time
 import logging
-from typing import List, Optional
+from typing import Optional
 
-import chromadb.config
-import chromadb.config
-import numpy as np
-
-from .chunk_loader import KnowledgeChunk, ChunkLoader
+from .chunk_loader import ChunkLoader
 from .embedder import Embedder
 
 logger = logging.getLogger(__name__)

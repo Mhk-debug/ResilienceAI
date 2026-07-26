@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import time
 import traceback
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -13,7 +14,7 @@ from project_schema import AssessmentIDResponse, AssessmentRequest, BuildingInpu
 # Direct imports from other routers/services to avoid internal httpx calls
 from routes.resilience import calculate_pure_resilience
 from routes.hazard import calculate_hazard_route
-from routes.llm import llm_service
+from services.llm_services import create_llm_service
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,12 @@ async def save_assessment(request: SaveAssessmentRequest, db: Session = Depends(
         hazard = request.hazard.model_dump(mode="json")
         llm = request.llm.model_dump(mode="json")
         profile = request.profile.model_dump(mode="json")
+        evidence = {
+            k: v.model_dump(mode="json") for k, v in request.evidence.items()
+        } if request.evidence else {}
+
+        # Merge evidence into the llm JSONB for storage
+        llm["evidence"] = evidence
 
         location = hazard["location"]
         hazard_metrics = hazard["hazard"]
@@ -108,6 +115,10 @@ async def process_assessment(
     def sse_event(data: dict) -> str:
         return f"data: {json.dumps(data)}\n\n"
 
+    # Capture retriever from app state before entering the generator
+    retriever = getattr(request.app.state, "retriever", None)
+    llm_service = create_llm_service(retriever=retriever)
+
     async def assessment_generator():
 
         try:
@@ -158,6 +169,7 @@ async def process_assessment(
                 "status": "Running environmental hazard engine..."
             })
 
+            t0 = time.time()
             building_task = asyncio.to_thread(
                 calculate_pure_resilience,
                 payload=building_input_payload,
@@ -174,6 +186,7 @@ async def process_assessment(
                 building_task,
                 hazard_task
             )
+            parallel_elapsed = time.time() - t0
 
             # ---------------------------------------------------------
             # BOTH PARALLEL TASKS COMPLETE
@@ -216,10 +229,12 @@ async def process_assessment(
                 ]
             )
 
-            llm_data = await asyncio.to_thread(
+            t1 = time.time()
+            llm_data, evidence_map = await asyncio.to_thread(
                 llm_service.analyze,
                 llm_input
             )
+            llm_elapsed = time.time() - t1
 
             yield sse_event({
                 "type": "stage_completed",
@@ -240,13 +255,16 @@ async def process_assessment(
                 profile=building_input_payload,
                 building=building_data,
                 hazard=hazard_data,
-                llm=llm_data
+                llm=llm_data,
+                evidence=evidence_map,
             )
 
+            t2 = time.time()
             final_data = await save_assessment(
                 request=save_payload,
                 db=db
             )
+            save_elapsed = time.time() - t2
 
             yield sse_event({
                 "type": "stage_completed",
@@ -256,6 +274,26 @@ async def process_assessment(
             # ---------------------------------------------------------
             # COMPLETE
             # ---------------------------------------------------------
+
+            total_elapsed = time.time() - t0
+
+            logger.info(
+                "Assessment complete | "
+                "parallel=%.2fs | "
+                "llm=%.2fs | "
+                "save=%.2fs | "
+                "total=%.2fs | "
+                "resilience=%.2f | "
+                "hazard=%.2f | "
+                "rag=%s",
+                parallel_elapsed,
+                llm_elapsed,
+                save_elapsed,
+                total_elapsed,
+                building_data.resilience_score,
+                hazard_data.hazard.get("overall_score", 0),
+                "enabled" if retriever is not None else "disabled",
+            )
 
             yield sse_event({
                 "type": "complete",

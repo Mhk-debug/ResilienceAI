@@ -130,12 +130,46 @@ class LLMRecommendation(BaseModel):
     priority: str 
     title: str
     description: str
+    evidence_ids: List[str] = Field(
+        default_factory=list,
+        description="Chunk IDs from retrieved knowledge supporting this recommendation"
+    )
 
+class RiskInterpretation(BaseModel):
+    structural_assessment: str = Field(
+        description="Explain structural vulnerability based only on provided building features"
+    )
+
+    environmental_assessment: str = Field(
+        description="Explain seismic hazard based only on provided environmental factors"
+    )
+
+    overall_reasoning: str = Field(
+        description="Combine structural and environmental factors into the final risk reasoning"
+    )
+
+class SummaryItem(BaseModel):
+    """A single key finding item, optionally linked to evidence chunks."""
+    text: str = Field(..., description="The key finding text")
+    evidence_ids: List[str] = Field(
+        default_factory=list,
+        description="Chunk IDs from retrieved knowledge supporting this finding"
+    )
+
+class EvidenceCitation(BaseModel):
+    """Full citation metadata for a retrieved knowledge chunk supporting AI recommendations."""
+    chunk_id: str = Field(..., description="Unique identifier of the chunk in the knowledge base")
+    source_title: str = Field("", description="Title of the source document")
+    source_org: str = Field("", description="Organization that published the source")
+    source_url: str = Field("", description="URL to the original source")
+    category: str = Field("", description="Knowledge base category (e.g., building_vulnerability)")
+    excerpt: str = Field("", description="Short excerpt of the chunk text (first ~300 chars)")
+    relevance_score: float = Field(0.0, ge=0.0, le=1.0, description="Relevance score from retrieval")
 
 class LLMAnalysisOutput(BaseModel):
-    summary: List[str]
+    summary: List[SummaryItem]
     recommendations: List[LLMRecommendation]
-    risk_interpretation: Dict[str, Any]
+    risk_interpretation: RiskInterpretation
     confidence: float
 
 class AssessmentRequest(BaseModel):
@@ -161,6 +195,10 @@ class SaveAssessmentRequest(BaseModel):
     building: ResilienceAssessmentResponse
     hazard: HazardReport
     llm: LLMAnalysisOutput
+    evidence: Dict[str, EvidenceCitation] = Field(
+        default_factory=dict,
+        description="Evidence citations linking LLM output to retrieved knowledge chunks"
+    )
 
 class AssessmentIDResponse(BaseModel):
     """Pydantic model representing the complete Assessment output."""

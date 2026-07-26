@@ -1,6 +1,6 @@
 "use client";
 
-import type { AssessmentIDResponse } from "@/app/types";
+import type { AssessmentIDResponse, EvidenceCitation, LLMAnalysisOutput } from "@/app/types";
 import { LocalStorageManager } from "@/components/local-storage-manager";
 import { calculateRiskScore, getRiskLevel } from "@/utils/risk";
 import { formatTimeAgo } from "@/utils/tools";
@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import AssessmentLoading from "./AssessmentLoading";
 import AssessmentError from "./AssessmentError";
 import AssessmentNotFound from "./AssessmentNotFound";
-import { Calendar } from "lucide-react";
+import { Calendar, BookOpen } from "lucide-react";
 import BuildingProfileCard from "./BuildingProfileCard";
 import RiskGauge from "./RiskGauge";
 import RiskInterpretation from "./RiskInterpretation";
@@ -25,6 +25,7 @@ function DashboardPage() {
     const [assessment, setAssessment] = useState<AssessmentIDResponse | null>(
         null,
     );
+    const [evidence, setEvidence] = useState<Record<string, EvidenceCitation>>({});
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -47,6 +48,11 @@ function DashboardPage() {
 
             const data = await response.json();
             setAssessment(data);
+
+            // Extract evidence from llm JSONB (may be nested under llm.evidence)
+            const llmData = data.llm || {};
+            const extractedEvidence = llmData.evidence || {};
+            setEvidence(extractedEvidence);
         } catch (err) {
             if (err instanceof Error) {
                 console.error("Failed to load assessment:", err);
@@ -159,7 +165,10 @@ function DashboardPage() {
                         indicators={assessment.hazard.indicators}
                     />
 
-                    <AiInsights llm={assessment.llm} />
+                    <AiInsights
+                        llm={assessment.llm}
+                        evidence={evidence}
+                    />
 
                     <SupportingEvidence events={assessment.hazard.events} />
                 </div>

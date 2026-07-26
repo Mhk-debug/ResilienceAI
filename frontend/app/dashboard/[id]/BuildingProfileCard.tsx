@@ -23,7 +23,6 @@ export default function BuildingProfileCard({ context }: BuildingProfileCardProp
       
       {/* Card Header */}
       <div className="space-y-1.5 border-b border-slate-100 pb-3">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Section 1.1 — Asset Under Assessment</span>
         <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
           <Building className="w-4.5 h-4.5 text-blue-600" />
           Building Engineering Profile
@@ -35,10 +34,10 @@ export default function BuildingProfileCard({ context }: BuildingProfileCardProp
         
         {/* Subsection 1: Structural Parameters */}
         <div className="space-y-2">
-          <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+          {/* <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
             <Layers className="w-3.5 h-3.5 text-blue-600" />
             Structural Specifications
-          </div>
+          </div> */}
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-slate-50/50 border border-slate-200/50 p-2.5 rounded-xl space-y-0.5">
               <span className="text-[10px] text-slate-450 font-medium">Floors Count</span>
@@ -73,10 +72,10 @@ export default function BuildingProfileCard({ context }: BuildingProfileCardProp
 
         {/* Subsection 2: Materials */}
         <div className="space-y-2">
-          <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+          {/* <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
             <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
             Key Substructure Components
-          </div>
+          </div> */}
           <div className="grid grid-cols-2 gap-2 text-[11px]">
             {substructureItems.map((item) => (
               <div 
@@ -100,10 +99,10 @@ export default function BuildingProfileCard({ context }: BuildingProfileCardProp
 
         {/* Subsection 3: Substructure Types */}
         <div className="space-y-2">
-          <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+          {/* <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
             <Building className="w-3.5 h-3.5 text-blue-600" />
             Envelope & Material Classification
-          </div>
+          </div> */}
           <div className="divide-y divide-slate-100 text-xs bg-slate-50/40 border border-slate-200/60 rounded-xl overflow-hidden">
             <div className="p-2.5 flex items-center justify-between gap-2">
               <span className="text-slate-500 font-medium text-[11px] shrink-0">Foundation</span>
@@ -120,11 +119,6 @@ export default function BuildingProfileCard({ context }: BuildingProfileCardProp
           </div>
         </div>
 
-      </div>
-
-      {/* Engineering Rating Label */}
-      <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-400 font-mono">
-        Classification: EN-1998 Eurocode 8 Seismic Diagnostic Specs
       </div>
 
     </div>

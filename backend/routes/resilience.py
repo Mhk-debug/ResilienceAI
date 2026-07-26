@@ -1,6 +1,5 @@
 import logging
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
 from services.resilience_service import predict_resilience
 # Import specific schema dependencies if needed, or define them here as requested.
 from project_schema import BuildingInput, ResilienceAssessmentResponse 
@@ -17,8 +16,8 @@ def calculate_pure_resilience(payload: BuildingInput, request: Request):
     """Calculate building resilience score."""
     
     # Safely retrieve ML models from app state initialized in main.py
-    model = request.state.model
-    expected_features = request.state.expected_features
+    model = request.app.state.model
+    expected_features = request.app.state.expected_features
 
     try:
         if model is None or expected_features is None:

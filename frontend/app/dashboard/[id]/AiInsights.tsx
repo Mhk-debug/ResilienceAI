@@ -1,17 +1,24 @@
 "use client";
 
-import type { LLMAnalysisOutput } from "@/app/types";
+import type { LLMAnalysisOutput, EvidenceCitation, SummaryItem } from "@/app/types";
 import {
     Sparkles,
     AlertCircle,
     AlertTriangle,
     Lightbulb,
     CheckCircle2,
+    ChevronDown,
+    ChevronRight,
+    BookOpen,
+    Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useState } from "react";
+import EvidenceCitationCard from "./EvidenceCitationCard";
 
 interface AiInsightsProps {
     llm: LLMAnalysisOutput;
+    evidence?: Record<string, EvidenceCitation>;
 }
 
 // ─── Priority config ──────────────────────────────────────────────────────────
@@ -68,8 +75,98 @@ function getPriority(p: string) {
     return PRIORITY[p.toLowerCase() as PriorityKey] ?? PRIORITY.blue;
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
-export default function AiInsights({ llm }: AiInsightsProps) {
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Safely convert a summary item (string or SummaryItem object) to string */
+function getSummaryText(item: string | SummaryItem): string {
+    if (typeof item === "string") return item;
+    return item?.text ?? "";
+}
+
+/** Get evidence_ids from a summary item */
+function getSummaryEvidenceIds(item: string | SummaryItem): string[] {
+    if (typeof item === "string") return [];
+    return item?.evidence_ids ?? [];
+}
+
+/** Check if evidence exists for a given evidence_id */
+function hasEvidence(evidence: Record<string, EvidenceCitation> | undefined, id: string): boolean {
+    return !!evidence && !!evidence[id];
+}
+
+// ─── Sub-components ──────────────────────────────────────────────────────────
+
+function FindingEvidenceBadge({ evidence, evidenceIds }: {
+    evidence: Record<string, EvidenceCitation> | undefined;
+    evidenceIds: string[];
+}) {
+    if (!evidenceIds || evidenceIds.length === 0 || !evidence) return null;
+
+    const validItems = evidenceIds.filter((id) => evidence[id]);
+    if (validItems.length === 0) return null;
+
+    // Show only the first source_org for compact display
+    const firstOrg = evidence[validItems[0]]?.source_org;
+    const count = validItems.length;
+
+    return (
+        <span className="inline-flex items-center gap-1 ml-2 text-[10px] text-slate-400 font-medium">
+            <BookOpen className="w-3 h-3" />
+            {firstOrg}
+            {count > 1 && <span>+{count - 1}</span>}
+        </span>
+    );
+}
+
+function RecommendationEvidence({ evidence, evidenceIds }: {
+    evidence: Record<string, EvidenceCitation> | undefined;
+    evidenceIds: string[];
+}) {
+    const [isOpen, setIsOpen] = useState(false);
+
+    if (!evidenceIds || evidenceIds.length === 0 || !evidence) return null;
+
+    const validEvidence = evidenceIds
+        .filter((id) => evidence[id])
+        .map((id) => evidence[id]);
+
+    if (validEvidence.length === 0) return null;
+
+    return (
+        <div className="mt-3">
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
+            >
+                {isOpen ? (
+                    <ChevronDown className="w-3.5 h-3.5" />
+                ) : (
+                    <ChevronRight className="w-3.5 h-3.5" />
+                )}
+                <BookOpen className="w-3.5 h-3.5" />
+                Why this recommendation?
+                <span className="text-slate-400 font-normal">
+                    ({validEvidence.length} source{validEvidence.length !== 1 ? "s" : ""})
+                </span>
+            </button>
+
+            {isOpen && (
+                <div className="mt-2 space-y-2 pl-5">
+                    {validEvidence.map((ev) => (
+                        <EvidenceCitationCard
+                            key={ev.chunk_id}
+                            evidence={ev}
+                            compact
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ─── Main Component ────────────────────────────────────────────────────────────
+export default function AiInsights({ llm, evidence = {} }: AiInsightsProps) {
     const hasSummary = llm.summary && llm.summary.length > 0;
     const hasRecs = llm.recommendations && llm.recommendations.length > 0;
 
@@ -90,27 +187,39 @@ export default function AiInsights({ llm }: AiInsightsProps) {
                 <div className="p-6 flex-1">
                     {hasSummary ? (
                         <ol className="space-y-4">
-                            {llm.summary.map((point, i) => (
-                                <li
-                                    key={i}
-                                    className="flex gap-3.5 items-start group border-b border-slate-200 pb-3"
-                                >
-                                    {/* Step indicator */}
-                                    <span
-                                        className={cn(
-                                            "shrink-0 mt-0.5 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center leading-none transition-colors",
-                                            i === 0
-                                                ? "bg-blue-600 text-white"
-                                                : "bg-slate-100 text-slate-500 group-hover:bg-blue-100 group-hover:text-blue-700",
-                                        )}
+                            {llm.summary.map((point, i) => {
+                                const text = getSummaryText(point);
+                                const evidenceIds = getSummaryEvidenceIds(point);
+
+                                return (
+                                    <li
+                                        key={i}
+                                        className="flex gap-3.5 items-start group border-b border-slate-200 pb-3"
                                     >
-                                        {i + 1}
-                                    </span>
-                                    <span className="text-sm text-slate-700 leading-relaxed">
-                                        {point}
-                                    </span>
-                                </li>
-                            ))}
+                                        {/* Step indicator */}
+                                        <span
+                                            className={cn(
+                                                "shrink-0 mt-0.5 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center leading-none transition-colors",
+                                                i === 0
+                                                    ? "bg-blue-600 text-white"
+                                                    : "bg-slate-100 text-slate-500 group-hover:bg-blue-100 group-hover:text-blue-700",
+                                            )}
+                                        >
+                                            {i + 1}
+                                        </span>
+                                        <div className="flex-1 min-w-0">
+                                            <span className="text-sm text-slate-700 leading-relaxed">
+                                                {text}
+                                            </span>
+                                            {/* Evidence source badge */}
+                                            <FindingEvidenceBadge
+                                                evidence={evidence}
+                                                evidenceIds={evidenceIds}
+                                            />
+                                        </div>
+                                    </li>
+                                );
+                            })}
                         </ol>
                     ) : (
                         <div className="flex flex-col items-center justify-center py-10 text-center">
@@ -165,7 +274,7 @@ export default function AiInsights({ llm }: AiInsightsProps) {
                                                     <Icon className="w-3.5 h-3.5" />
                                                 </div>
 
-                                                {/* Text */}
+                                                {/* Text + evidence */}
                                                 <div className="flex-1 min-w-0 space-y-0.5">
                                                     <div className="flex items-center gap-2 flex-wrap">
                                                         <span className="text-sm font-semibold text-slate-900 leading-snug">
@@ -183,6 +292,11 @@ export default function AiInsights({ llm }: AiInsightsProps) {
                                                     <p className="text-xs text-slate-500 leading-relaxed">
                                                         {rec.description}
                                                     </p>
+                                                    {/* Evidence section */}
+                                                    <RecommendationEvidence
+                                                        evidence={evidence}
+                                                        evidenceIds={rec.evidence_ids || []}
+                                                    />
                                                 </div>
                                             </div>
                                         </li>

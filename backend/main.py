@@ -34,14 +34,50 @@ async def lifespan(app: FastAPI):
             
         logger.info(f"Artifacts loaded successfully. Ready to parse {len(expected_features)} inputs.")
         
-        # Inject models into app state to be accessed by routers safely
-        yield {
-            "model": model, 
-            "expected_features": expected_features
-        }
+        # Initialize the retriever (may be None — graceful degradation)
+        retriever = _init_retriever()
+        
+        # Inject models and retriever into app state for router access
+        app.state.model = model
+        app.state.expected_features = expected_features
+        app.state.retriever = retriever
+        
+        yield
+        
     except Exception as e:
         logger.critical(f"Critical Boot Failure: {str(e)}", exc_info=True)
         raise e
+
+
+def _init_retriever():
+    """
+    Initialize the knowledge retriever at startup.
+    
+    Returns a Retriever instance if the ChromaDB index exists,
+    or None if retrieval dependencies are unavailable.
+    
+    Uses build_default_retriever() which handles all failure modes.
+    """
+    try:
+        from services.retrieval import build_default_retriever
+        retriever = build_default_retriever()
+        if retriever is None:
+            logger.info(
+                "Knowledge retriever not available — "
+                "assessments will proceed without RAG context. "
+                "Run `python scripts/build_kb_index.py` to enable."
+            )
+        else:
+            logger.info("Knowledge retriever initialized successfully.")
+        return retriever
+    except Exception as e:
+        logger.warning(
+            "Knowledge retriever initialization failed: %s. "
+            "Assessments will proceed without RAG context.",
+            e,
+        )
+        return None
+
 
 # Initialize application
 app = FastAPI(

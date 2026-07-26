@@ -127,16 +127,39 @@ export interface HazardReport {
 }
 
 export interface LLMRecommendation {
-  priority: 'red' | 'yellow' | 'blue';
+  priority: 'red' | 'orange' | 'yellow' | 'green';
   title: string;
   description: string;
+  evidence_ids?: string[];
+}
+
+export interface SummaryItem {
+  text: string;
+  evidence_ids?: string[];
+}
+
+export interface RiskInterpretation {
+  structural_assessment: string;
+  environmental_assessment: string;
+  overall_reasoning: string;
+}
+
+export interface EvidenceCitation {
+  chunk_id: string;
+  source_title: string;
+  source_org: string;
+  source_url: string;
+  category: string;
+  excerpt: string;
+  relevance_score: number;
 }
 
 export interface LLMAnalysisOutput {
-  summary: string[];
+  summary: SummaryItem[];
   recommendations: LLMRecommendation[];
-  risk_interpretation: Record<string, any>;
+  risk_interpretation: RiskInterpretation | Record<string, any>;
   confidence: number;
+  evidence?: Record<string, EvidenceCitation>;
 }
 
 export interface AssessmentRequest {
@@ -185,7 +208,7 @@ export interface AssessmentIDResponse {
   profile: BuildingInput;
   building: ResilienceAssessmentResponse;
   hazard: HazardReport;
-  llm: LLMAnalysisOutput;
+  llm: LLMAnalysisOutput & { evidence?: Record<string, EvidenceCitation> };
   model_version?: string | null;
   execution_time_seconds?: number | null;
 }
