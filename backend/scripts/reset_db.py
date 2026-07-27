@@ -14,7 +14,13 @@ Usage:
     python -m database.reset_db.py
 """
 
-from database.models import Assessment
+# Add backend to path
+import os
+import sys
+
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
 from database.session import Base, engine
 
 Base.metadata.drop_all(bind=engine)

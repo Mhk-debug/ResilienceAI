@@ -11,6 +11,7 @@ from routes.resilience import router as resilience_router
 from routes.hazard import router as hazard_router
 from routes.llm import router as llm_router
 from routes.assessment import router as assessment_router
+from routes.auth import router as auth_router
 
 logger = logging.getLogger(__name__)
 
@@ -106,3 +107,4 @@ app.include_router(resilience_router)
 app.include_router(hazard_router)
 app.include_router(llm_router)
 app.include_router(assessment_router)
+app.include_router(auth_router)

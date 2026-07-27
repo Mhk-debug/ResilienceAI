@@ -17,9 +17,35 @@ from sqlalchemy import (
     DateTime,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import (
+    String,
+    Float,
+    DateTime,
+    ForeignKey,
+    Boolean,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .session import Base
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, nullable=False
+    )
+    email: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=False)
+    hashed_password: Mapped[str] = mapped_column(String, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow, nullable=False
+    )
+
+    assessments: Mapped[list["Assessment"]] = relationship(back_populates="owner")
+
+    def __repr__(self) -> str:
+        return f"<User(id={self.id}, email='{self.email}')>"
+
 
 class Assessment(Base):
     __tablename__ = "assessments"
@@ -34,6 +60,14 @@ class Assessment(Base):
         default=uuid.uuid4,
         nullable=False,
     )
+
+    # -------------------------
+    # Foreign Key to User
+    # -------------------------
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
+    )
+    owner: Mapped["User"] = relationship(back_populates="assessments")
 
     # -------------------------
     # Timestamp

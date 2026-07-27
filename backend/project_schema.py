@@ -199,6 +199,7 @@ class SaveAssessmentRequest(BaseModel):
         default_factory=dict,
         description="Evidence citations linking LLM output to retrieved knowledge chunks"
     )
+    execution_time_seconds: Optional[float] = None
 
 class AssessmentIDResponse(BaseModel):
     """Pydantic model representing the complete Assessment output."""

@@ -56,6 +56,7 @@ async def save_assessment(request: SaveAssessmentRequest, db: Session = Depends(
         location = hazard["location"]
         hazard_metrics = hazard["hazard"]
         metadata = hazard.get("metadata", {})
+        execution_time = request.execution_time_seconds
         
         place_name = await get_place_name(
             location["latitude"],
@@ -70,7 +71,7 @@ async def save_assessment(request: SaveAssessmentRequest, db: Session = Depends(
             hazard_score=hazard_metrics["overall_score"],
             hazard_level=hazard_metrics["hazard_level"],
             model_version=metadata.get("model_version"),
-            execution_time_seconds=metadata.get("execution_time_seconds"),
+            execution_time_seconds=execution_time,
             profile=profile,
             building=building,
             hazard=hazard,
@@ -236,6 +237,9 @@ async def process_assessment(
             )
             llm_elapsed = time.time() - t1
 
+            # Total core work: parallel (resilience + hazard) + LLM
+            total_work_elapsed = parallel_elapsed + llm_elapsed
+
             yield sse_event({
                 "type": "stage_completed",
                 "stage": "llm"
@@ -257,6 +261,7 @@ async def process_assessment(
                 hazard=hazard_data,
                 llm=llm_data,
                 evidence=evidence_map,
+                execution_time_seconds=total_work_elapsed,
             )
 
             t2 = time.time()

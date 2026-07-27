@@ -25,6 +25,7 @@ debugpy==1.8.20
 decorator==5.2.1
 distro==1.9.0
 durationpy==0.10
+ecdsa==0.19.2
 executing==2.2.1
 fastapi==0.139.2
 filelock==3.32.0
@@ -92,6 +93,7 @@ owslib==0.36.0
 packaging==26.0
 pandas==3.0.3
 parso==0.8.6
+passlib==1.7.4
 pillow==12.3.0
 platformdirs==4.5.1
 plotly==6.9.0
@@ -118,6 +120,7 @@ pyproject_hooks==1.2.0
 pytest==9.1.1
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.2
+python-jose==3.5.0
 python-multipart==0.0.32
 PyYAML==6.0.3
 pyzmq==27.1.0
@@ -128,6 +131,7 @@ requests==2.34.2
 requests-oauthlib==2.0.0
 rich==15.0.0
 rpds-py==2026.6.3
+rsa==4.9.1
 safetensors==0.8.0
 scikit-learn==1.9.0
 scipy==1.18.0

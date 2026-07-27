@@ -397,16 +397,22 @@ ResilienceAI/
 
 The application requires the following environment variables:
 
-| Variable         | Description                                        |
-| ---------------- | -------------------------------------------------- |
-| `GEMINI_API_KEY` | API key used to access Google's Gemini API         |
-| `DATABASE_URL`   | PostgreSQL connection string for the Neon database |
+| Variable                     | Description                                            |
+| ---------------------------- | ------------------------------------------------------ |
+| `GEMINI_API_KEY`             | API key used to access Google's Gemini API             |
+| `DATABASE_URL`               | PostgreSQL connection string for the Neon database     |
+| `SECRET_KEY`                 | Secret key for JWT token signing (backend)             |
+| `ALGORITHM`                  | Algorithm for JWT token signing (backend, e.g., HS256) |
+| `ACCESS_TOKEN_EXPIRE_MINUTES`| Expiration time for JWT access tokens (backend)        |
 
 Example:
 
 ```env
 GEMINI_API_KEY="your_gemini_api_key"
 DATABASE_URL="your_neon_database_connection_string"
+SECRET_KEY="a_long_random_string_for_jwt_security"
+ALGORITHM="HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES=30
 ```
 
 ---
@@ -465,9 +471,10 @@ The following should remain private:
 * Gemini API keys
 * Neon database connection strings
 * Database passwords
+* JWT secret keys
 * Any other API credentials
 
-Make sure `.env` is included in `.gitignore`:
+Make sure `.env` is included in `.gitignore` and that you're using a strong, randomly generated `SECRET_KEY`:
 
 ```text
 .env
@@ -494,6 +501,8 @@ If a secret is accidentally committed to a public repository, revoke or rotate t
 * FastAPI
 * Uvicorn
 * Pydantic
+* `python-jose` for JWT
+* `passlib` for password hashing
 
 ### Database
 
