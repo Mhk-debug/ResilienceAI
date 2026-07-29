@@ -2,25 +2,44 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { useAuth } from "@/lib/auth-context";
+import { BASE_API_URL } from "@/utils/constants";
 
 export default function Home() {
     const router = useRouter();
+    const { user, isAuthenticated, isLoading } = useAuth();
 
     useEffect(() => {
-        const latestAssessment = localStorage.getItem("latestAssessmentId");
+        if (isLoading) return; // wait for auth check
 
-        if (!latestAssessment) {
-            router.replace("/form");
-            return;
+        if (isAuthenticated && user) {
+            // Tier 1: logged-in user → fetch latest from API
+            fetch(`${BASE_API_URL}/assessment?limit=1`, { credentials: "include" })
+                .then((res) => (res.ok ? res.json() : Promise.reject()))
+                .then((assessments) => {
+                    if (Array.isArray(assessments) && assessments.length > 0) {
+                        router.replace(`/dashboard/${assessments[0].id}`);
+                    } else {
+                        router.replace("/form");
+                    }
+                })
+                .catch(() => {
+                    router.replace("/form");
+                });
+        } else {
+            // Tier 2: anonymous → fall back to localStorage
+            try {
+                const latestAssessment = localStorage.getItem("latestAssessmentId");
+                if (latestAssessment) {
+                    router.replace(`/dashboard/${latestAssessment}`);
+                } else {
+                    router.replace("/form");
+                }
+            } catch {
+                router.replace("/form");
+            }
         }
-
-        try {
-            router.replace(`/dashboard/${latestAssessment}`);
-        } catch {
-            localStorage.removeItem("earthquake_assessment");
-            router.replace("/form");
-        }
-    }, [router]);
+    }, [router, user, isAuthenticated, isLoading]);
 
     return (
         <div className="flex min-h-screen items-center justify-center bg-background">

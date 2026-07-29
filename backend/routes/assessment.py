@@ -9,6 +9,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from database import get_db, Assessment
+from database.models import User
+from services.auth import get_current_user_from_cookie
 from project_schema import AssessmentIDResponse, AssessmentRequest, BuildingInput, HazardInput, SaveAssessmentRequest, LLMAnalysisInput
 
 # Direct imports from other routers/services to avoid internal httpx calls
@@ -19,7 +21,7 @@ from services.llm_services import create_llm_service
 logger = logging.getLogger(__name__)
 
 router = APIRouter(
-    prefix="/api/assessment",
+    prefix="/assessment",
     tags=["Orchestration", "Database"]
 )
 
@@ -39,7 +41,11 @@ async def get_place_name(
     return getattr(location, "address", None) if location else None
 
 @router.post("/save", status_code=status.HTTP_201_CREATED, summary="Persist a complete earthquake risk assessment")
-async def save_assessment(request: SaveAssessmentRequest, db: Session = Depends(get_db)):
+async def save_assessment(
+    request: SaveAssessmentRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_cookie),
+):
     """Persists the complete assessment into relational columns and JSONB documents."""
     try:
         building = request.building.model_dump(mode="json")
@@ -64,6 +70,7 @@ async def save_assessment(request: SaveAssessmentRequest, db: Session = Depends(
         )
 
         assessment = Assessment(
+            user_id=current_user.id,
             latitude=location["latitude"],
             longitude=location["longitude"],
             place_name=place_name,
@@ -110,7 +117,8 @@ async def save_assessment(request: SaveAssessmentRequest, db: Session = Depends(
 async def process_assessment(
     payload: AssessmentRequest,
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_cookie),
 ):
 
     def sse_event(data: dict) -> str:
@@ -126,7 +134,6 @@ async def process_assessment(
             # ---------------------------------------------------------
             # INITIALIZATION
             # ---------------------------------------------------------
-
             yield sse_event({
                 "type": "stage_started",
                 "stage": "initializing",
@@ -267,7 +274,8 @@ async def process_assessment(
             t2 = time.time()
             final_data = await save_assessment(
                 request=save_payload,
-                db=db
+                db=db,
+                current_user=current_user,
             )
             save_elapsed = time.time() - t2
 
@@ -326,6 +334,45 @@ async def process_assessment(
     )
 
 @router.get(
+    "",
+    status_code=status.HTTP_200_OK,
+    summary="List all assessments for the authenticated user",
+    description="Returns lightweight assessment summaries (no JSONB blobs) ordered by creation date descending."
+)
+def list_user_assessments(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_cookie),
+    limit: int = 20,
+    offset: int = 0,
+) -> list[dict]:
+    """
+    Returns a lightweight list of assessments belonging to the current user,
+    ordered by created_at descending. Omits the bulky JSONB columns.
+    """
+    assessments = (
+        db.query(Assessment)
+        .filter(Assessment.user_id == current_user.id)
+        .order_by(Assessment.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "id": str(a.id),
+            "created_at": a.created_at.isoformat(),
+            "place_name": a.place_name,
+            "latitude": a.latitude,
+            "longitude": a.longitude,
+            "resilience_score": a.resilience_score,
+            "hazard_score": a.hazard_score,
+            "hazard_level": a.hazard_level,
+        }
+        for a in assessments
+    ]
+
+
+@router.get(
     "/{assessment_id}",
     response_model=AssessmentIDResponse,
     status_code=status.HTTP_200_OK,
@@ -334,20 +381,24 @@ async def process_assessment(
 )
 def get_assessment_by_id(
     assessment_id: uuid.UUID,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_cookie),
 ) -> Assessment:
     """
     Fetch an individual assessment row based on its ID.
+    Verifies the assessment belongs to the authenticated user.
     
     Args:
         assessment_id (uuid.UUID): The unique identifier of the assessment.
         db (Session): The SQLAlchemy database session.
+        current_user (User): The authenticated user from the session cookie.
         
     Returns:
         Assessment: The SQLAlchemy model instance (FastAPI auto-converts this to AssessmentResponse).
     """
     try:
         # Query the database for the specific ID
+        print("id", assessment_id)
         assessment = db.query(Assessment).filter(Assessment.id == assessment_id).first()
 
         # Handle case where ID does not exist
@@ -356,6 +407,17 @@ def get_assessment_by_id(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Assessment with ID {assessment_id} not found."
+            )
+
+        # Enforce ownership: only the user who created the assessment may view it
+        if assessment.user_id != current_user.id:
+            logger.warning(
+                f"User {current_user.id} attempted to access assessment {assessment_id} "
+                f"owned by user {assessment.user_id}."
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to access this assessment."
             )
 
         return assessment

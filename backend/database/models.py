@@ -28,6 +28,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .session import Base
 
+
 class User(Base):
     __tablename__ = "users"
 
@@ -37,6 +38,42 @@ class User(Base):
     email: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=False)
     hashed_password: Mapped[str] = mapped_column(String, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    # --- Email Verification ---
+    email_verified: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    verification_token: Mapped[str | None] = mapped_column(
+        String, nullable=True, default=None
+    )
+    verification_token_expires: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
+
+    # --- Password Reset ---
+    password_reset_token: Mapped[str | None] = mapped_column(
+        String, nullable=True, default=None
+    )
+    password_reset_token_expires: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
+
+    # --- Email Change ---
+    new_email: Mapped[str | None] = mapped_column(
+        String, nullable=True, default=None
+    )
+    email_change_token: Mapped[str | None] = mapped_column(
+        String, nullable=True, default=None
+    )
+    email_change_token_expires: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
+
+    # --- Audit ---
+    password_changed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow, nullable=False
     )

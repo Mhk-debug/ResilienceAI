@@ -1,29 +1,14 @@
 "use client";
 
 import React from "react";
-import { Activity, LogOut, LogIn, UserPlus } from "lucide-react";
+import { Activity, LogIn, UserPlus } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
-import { BASE_API_URL } from "@/utils/constants";
+import ProfileButton from "./profile-button";
 
 function Header() {
-    const router = useRouter();
-    const { user, isAuthenticated, logout } = useAuth();
-
-    const handleLogout = async () => {
-        try {
-            await fetch(`${BASE_API_URL}/auth/logout`, {
-                method: "POST",
-                credentials: "include",
-            });
-        } catch {
-            // Logout even if server is unreachable
-        }
-        logout();
-        router.push("/login");
-    };
+    const { isAuthenticated, isLoading } = useAuth();
 
     return (
         <header className="bg-[hsl(224_58%_18%)] px-6 py-4 md:px-10 md:py-5 flex items-center justify-between shadow-lg">
@@ -40,21 +25,13 @@ function Header() {
             </div>
 
             <div className="flex items-center gap-3">
-                {isAuthenticated && user ? (
-                    <>
-                        <span className="hidden truncate text-xs font-medium text-primary-foreground/80 sm:block max-w-[140px]">
-                            {user.email}
-                        </span>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={handleLogout}
-                            className="text-primary-foreground/70 hover:text-primary-foreground hover:bg-primary-foreground/10"
-                        >
-                            <LogOut className="h-4 w-4" />
-                            <span className="hidden sm:inline">Logout</span>
-                        </Button>
-                    </>
+                {isLoading ? (
+                    // Skeleton while auth check is running — no flicker
+                    <div className="flex items-center gap-2">
+                        <div className="h-8 w-20 animate-pulse rounded-md bg-primary-foreground/10" />
+                    </div>
+                ) : isAuthenticated ? (
+                    <ProfileButton />
                 ) : (
                     <>
                         <Link href="/login">
