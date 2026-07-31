@@ -310,6 +310,126 @@ FAULT_MODERATE_LIMIT = 75.0
 
 ---
 
+## API Failure Protection & Graceful Degradation
+
+The hazard engine is designed to **never crash** due to external API failures. Every network-dependent component is wrapped with isolation, timeouts, and deterministic fallbacks.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    calculate_hazard()                           │
+├─────────────────────────────────────────────────────────────────┤
+│  USGS Catalog (network)     →  _safe_usgs()      →  [] + warn  │
+│  SoilGrids (network)        →  _safe_soil()      →  fallback   │
+│  Fault Proximity (local)    →  _safe_fault()     →  120km est. │
+│  Historical Scoring (local) →  _safe_score()     →  0.0        │
+│  Recurrence (local)         →  _safe_recurrence()→  null       │
+│  ShakeMap (local)           →  _safe_shakemap()  →  0.0 PGA    │
+│  Statistics (local)         →  _safe_stats()     →  null       │
+├─────────────────────────────────────────────────────────────────┤
+│  Calibration                →  try/except → _build_degraded()  │
+│  Top-level catch-all        →  except → _build_degraded()      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Per-Component Timeouts & Fallbacks
+
+| Component | Timeout | Failure Mode | Fallback Behavior |
+|-----------|---------|--------------|-------------------|
+| **USGS Catalog** | 6.0 s | timeout / HTTP error / JSON decode | Empty event list, `api_status: "timeout"`, warning added |
+| **SoilGrids** | 12.0 s overall, 5.0 s per layer | timeout / WCS error / < 3 layers | Deterministic regional heuristic (e.g., "Irrawaddy Delta / Yangon"), `api_status: "fallback"` |
+| **Fault Proximity** | N/A (local) | Exception | `"Unmapped Local Crustal Fault"` at 120 km, Green |
+| **Historical Scoring** | N/A (local) | Exception | Event score = 0.0, empty processed events |
+| **Gutenberg-Richter** | N/A (local) | Exception | `a_value: null, b_value: null, recurrence_m6_years: null` |
+| **ShakeMap** | N/A (local) | Exception | `peak_pga: 0.0, peak_mmi: 1.0` |
+| **Catalog Statistics** | N/A (local) | Exception | All nulls, only `events_analyzed` and `catalog_span_years` filled |
+
+### Degraded Mode Report (`_build_degraded_report()`)
+
+When any unexpected exception occurs, or calibration fails, the engine returns a **complete valid report** using only local/deterministic inputs:
+
+- **Hazard score** computed from: fault proximity + soil fallback + event_score (0.0)
+- **Confidence** reduced by **0.35** (minimum 0.20)
+- **`metadata.degraded: true`**
+- **`metadata.api_status.engine: "degraded"`**
+- **Warnings** include the root cause
+- **Summary sentences** explicitly state degraded mode
+
+### Confidence Penalties
+
+| Condition | Penalty | Floor |
+|-----------|---------|-------|
+| USGS Catalog ≠ "success" | −0.20 | 0.20 |
+| SoilGrids ≠ "success" | −0.10 | 0.20 |
+| Full degraded mode | −0.35 | 0.20 |
+
+### API Status Codes
+
+The `metadata.api_status` object tracks every external dependency:
+
+```json
+{
+  "USGS_Catalog": "success" | "timeout" | "failure" | "unavailable",
+  "SoilGrids": "success" | "fallback" | "failure",
+  "engine": "normal" | "degraded"
+}
+```
+
+### SoilGrids Regional Fallbacks
+
+Deterministic profiles for known soft-soil basins:
+
+| Region | Coordinates | Soil Class | Bulk Density | LSI Risk |
+|--------|-------------|------------|--------------|----------|
+| Irrawaddy Delta / Yangon | 15.5–17.8°N, 95.5–97.0°E | Clay Loam | 1.20 | Moderate |
+| Mississippi Delta / New Orleans | 29.0–31.0°N, 91.0–89.0°W | Loamy Sand | 1.15 | Moderate |
+| Ganges Delta / Bangladesh | 21.0–24.0°N, 88.0–91.0°E | Loamy Sand | 1.15 | Moderate |
+| Tokyo Bay | 35.2–35.8°N, 139.5–140.2°E | Sandy Clay Loam | 1.25 | Moderate |
+| San Francisco Bay | 37.4–38.0°N, 122.5–122.1°W | Clay Loam | 1.18 | Moderate |
+| Bangkok / Chao Phraya | 13.5–14.1°N, 100.2–100.8°E | Clay | 1.15 | High |
+| **Default (elsewhere)** | — | Loam | 1.42 | Low |
+
+Fallback source string format: `"Deterministic Coastal/Alluvial Heuristic (Fallback) — {Region Name}"`
+
+### Testing Failure Scenarios
+
+```bash
+# Unit tests mock external failures
+pytest tests/test_hazard.py::test_engine_survives_api_failures -v
+pytest tests/test_hazard.py::test_engine_survives_unexpected_exception -v
+
+# Manual offline test
+python -c "
+import asyncio
+from unittest.mock import patch
+from services.hazard_engine import engine as eng_mod
+
+async def test():
+    with patch.object(eng_mod, 'query_usgs_catalog', 
+                      lambda *a, **k: ([], {'status': 'timeout'}, ['USGS timeout'])):
+        with patch.object(eng_mod, 'fetch_soilgrids_data',
+                          lambda lat, lon: eng_mod.get_fallback_soil_properties(lat, lon)):
+            r = await eng_mod.calculate_hazard(16.84, 96.17)
+            print(f'Score: {r[\"hazard\"][\"overall_score\"]}')
+            print(f'API Status: {r[\"metadata\"][\"api_status\"]}')
+            print(f'Warnings: {r[\"metadata\"][\"warnings\"]}')
+
+asyncio.run(test())
+"
+```
+
+### Behavior Guarantees
+
+1. **No unhandled exceptions** — every code path returns a dict matching `HazardReport` schema
+2. **Always valid JSON** — Pydantic `HazardReport(**report_dict)` never fails
+3. **Deterministic fallbacks** — same lat/lon always produces same degraded output
+4. **Informative metadata** — `warnings`, `api_status`, `degraded` flag explain what happened
+5. **Confidence reflects data quality** — consumers can trust `confidence` field
+6. **Assessment pipeline never blocks** — `/api/assessment/process` SSE always completes
+
+---
+
 ## Testing
 
 ```bash

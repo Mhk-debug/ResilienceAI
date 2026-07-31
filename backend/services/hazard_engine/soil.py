@@ -1,34 +1,39 @@
 """
-
 hazard_engine/soil.py
 
+SoilGrids WCS client with timeouts, caching, and deterministic regional fallbacks.
+The hazard engine must never fail solely because SoilGrids is unreachable.
 """
-
 import asyncio
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import copy
-import time
 import logging
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError
 from typing import Dict, Any, Optional, Tuple
-from owslib.wcs import WebCoverageService
-from rasterio.io import MemoryFile
-import numpy as np
 
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
-
 properties_names = ["clay", "sand", "silt", "bdod", "cfvo", "soc"]
-delta = 0.01 # Increasing this lowers the accuracy of the fallback average soil properties
-value = 'mean'
+delta = 0.01  # Increasing this lowers the accuracy of the fallback average soil properties
+value = "mean"
 depths = ["0-5cm", "5-15cm", "15-30cm"]
 
 _SOIL_CACHE_TTL_SECONDS = 60 * 60 * 24  # 24 hours
 _SOIL_CACHE: Dict[Tuple[float, float], Tuple[float, Dict[str, Any]]] = {}
 
+# Overall budget for the SoilGrids multi-layer fetch (seconds).
+SOILGRIDS_OVERALL_TIMEOUT_SECONDS = 12.0
+# Per-layer WCS request budget.
+SOILGRIDS_LAYER_TIMEOUT_SECONDS = 5.0
+# Minimum number of property means required to trust API data.
+_MIN_PROPERTIES_FOR_SUCCESS = 3
+
 
 def _get_cache_key(lat: float, lon: float) -> Tuple[float, float]:
     return (round(lat, 3), round(lon, 3))
+
 
 def _get_cached_soil_properties(lat: float, lon: float) -> Optional[Dict[str, Any]]:
     cache_key = _get_cache_key(lat, lon)
@@ -43,30 +48,55 @@ def _get_cached_soil_properties(lat: float, lon: float) -> Optional[Dict[str, An
 
     return copy.deepcopy(data)
 
+
 def _cache_soil_properties(lat: float, lon: float, data: Dict[str, Any]) -> None:
     _SOIL_CACHE[_get_cache_key(lat, lon)] = (time.time(), copy.deepcopy(data))
 
 
 async def fetch_soilgrids_data(lat: float, lon: float) -> Dict[str, Any]:
+    """
+    Fetch soil properties for a coordinate.
+
+    Always returns a usable property dict. On API failure/timeout, returns a
+    deterministic regional fallback and tags source accordingly.
+    """
     cached = _get_cached_soil_properties(lat, lon)
     if cached is not None:
         return cached
 
     try:
-        # Offload the blocking thread pool and WCS network requests 
-        # so they don't lock up your main event loop thread
-        values = await asyncio.to_thread(_fetch_all_layers, lat, lon)
-        result = _convert_to_features(values)
+        values = await asyncio.wait_for(
+            asyncio.to_thread(_fetch_all_layers, lat, lon),
+            timeout=SOILGRIDS_OVERALL_TIMEOUT_SECONDS,
+        )
+
+        if not values or len(values) < _MIN_PROPERTIES_FOR_SUCCESS:
+            logger.warning(
+                "SoilGrids returned insufficient layers (%s); using fallback for (%.4f, %.4f)",
+                list(values.keys()) if values else [],
+                lat,
+                lon,
+            )
+            result = get_fallback_soil_properties(lat, lon)
+        else:
+            result = _convert_to_features(values)
+    except asyncio.TimeoutError:
+        logger.warning(
+            "SoilGrids overall fetch timed out after %.1fs for (%.4f, %.4f)",
+            SOILGRIDS_OVERALL_TIMEOUT_SECONDS,
+            lat,
+            lon,
+        )
+        result = get_fallback_soil_properties(lat, lon)
     except Exception as e:
-        logger.warning(f"WCS soil fetch failed: {e}")
+        logger.warning("WCS soil fetch failed for (%.4f, %.4f): %s", lat, lon, e)
         result = get_fallback_soil_properties(lat, lon)
 
     _cache_soil_properties(lat, lon, result)
     return result
 
 
-def _fetch_all_layers(lat, lon):
-
+def _fetch_all_layers(lat: float, lon: float) -> Dict[str, float]:
     params = {
         "crs": "urn:ogc:def:crs:EPSG::4326",
         "format": "GEOTIFF_INT16",
@@ -76,16 +106,14 @@ def _fetch_all_layers(lat, lon):
             lon - delta,
             lat - delta,
             lon + delta,
-            lat + delta
-        )
+            lat + delta,
+        ),
     }
 
-    values = {prop: [] for prop in properties_names}
+    values: Dict[str, list] = {prop: [] for prop in properties_names}
 
     with ThreadPoolExecutor(max_workers=8) as executor:
-
         futures = []
-
         for prop in properties_names:
             for depth in depths:
                 futures.append(
@@ -95,37 +123,53 @@ def _fetch_all_layers(lat, lon):
                         depth,
                         lat,
                         lon,
-                        params
+                        params,
                     )
                 )
 
-        for future in as_completed(futures):
+        try:
+            for future in as_completed(futures, timeout=SOILGRIDS_OVERALL_TIMEOUT_SECONDS):
+                try:
+                    prop, val = future.result(timeout=0.1)
+                except Exception as e:
+                    logger.debug("Soil layer future failed: %s", e)
+                    continue
 
-            prop, val = future.result()
+                if val is not None:
+                    values[prop].append(val)
+        except FuturesTimeoutError:
+            logger.warning(
+                "SoilGrids thread pool timed out after %.1fs; using partial results",
+                SOILGRIDS_OVERALL_TIMEOUT_SECONDS,
+            )
+            # Cancel outstanding work best-effort
+            for future in futures:
+                future.cancel()
 
-            if val is not None:
-                values[prop].append(val)
-
-    results = {}
-
+    results: Dict[str, float] = {}
     for prop, vals in values.items():
         if vals:
             results[prop] = float(np.mean(vals))
 
     return results
 
+
 def _fetch_single_layer(prop, depth, lat, lon, params):
+    # Lazy imports keep module import cheap and isolate optional heavy deps.
+    from owslib.wcs import WebCoverageService
+    from rasterio.io import MemoryFile
 
     identifier = f"{prop}_{depth}_{value}"
 
     try:
         wcs = WebCoverageService(
             f"https://maps.isric.org/mapserv/{prop}",
-            version="1.0.0"
+            version="1.0.0",
+            timeout=SOILGRIDS_LAYER_TIMEOUT_SECONDS,
         )
 
         if wcs is None:
-            raise Exception("Web Coverage Service unavailable")
+            raise RuntimeError("Web Coverage Service unavailable")
 
         response = wcs.getCoverage(
             identifier=identifier,
@@ -133,12 +177,11 @@ def _fetch_single_layer(prop, depth, lat, lon, params):
             bbox=params["bbox"],
             resx=params["resx"],
             resy=params["resy"],
-            format=params["format"]
+            format=params["format"],
         )
 
         with MemoryFile(response.read()) as memfile:
             with memfile.open() as src:
-
                 point = next(src.sample([(lon, lat)]))[0]
                 nodata = src.nodata
 
@@ -146,16 +189,12 @@ def _fetch_single_layer(prop, depth, lat, lon, params):
                     return prop, float(point)
 
                 band = src.read(1)
-
                 row, col = src.index(lon, lat)
-
-                max_radius = 5      # searches up to an 11×11 window
+                max_radius = 5  # searches up to an 11×11 window
 
                 for radius in range(1, max_radius + 1):
-
                     r0 = max(0, row - radius)
                     r1 = min(src.height, row + radius + 1)
-
                     c0 = max(0, col - radius)
                     c1 = min(src.width, col + radius + 1)
 
@@ -172,12 +211,12 @@ def _fetch_single_layer(prop, depth, lat, lon, params):
                 return prop, None
 
     except Exception as e:
-        logger.warning(f"{identifier}: {e}")
+        logger.warning("%s: %s", identifier, e)
 
     return prop, None
 
-def _convert_to_features(v: Dict[str, float]) -> Dict[str, Any]:
 
+def _convert_to_features(v: Dict[str, float]) -> Dict[str, Any]:
     sand = v.get("sand", 400) / 10.0
     clay = v.get("clay", 250) / 10.0
     silt = v.get("silt", 350) / 10.0
@@ -197,203 +236,174 @@ def _convert_to_features(v: Dict[str, float]) -> Dict[str, Any]:
         "sand_pct": sand,
         "clay_pct": clay,
         "silt_pct": silt,
-
         "bulk_density": bdod,
         "coarse_fragments_pct": cfvo,
         "organic_carbon_pct": soc,
-
-        "source": "SoilGrids API"
+        "source": "SoilGrids API",
     }
+
 
 def get_fallback_soil_properties(lat: float, lon: float) -> Dict[str, Any]:
-
-    is_delta = False
-
-    deltas = [
-
-        {"name": "Mississippi Delta / New Orleans", "lat": (29.0, 31.0), "lon": (-91.0, -89.0)},
-
-        {"name": "Ganges Delta / Bangladesh", "lat": (21.0, 24.0), "lon": (88.0, 91.0)},
-
-        {"name": "Tokyo Bay / Soft alluvial", "lat": (35.2, 35.8), "lon": (139.5, 140.2)},
-
-        {"name": "San Francisco Bay mud", "lat": (37.4, 38.0), "lon": (-122.5, -122.1)},
-
-        {"name": "Bangkok Chao Phraya mud", "lat": (13.5, 14.1), "lon": (100.2, 100.8)},
-
+    """
+    Deterministic regional soil heuristics used when SoilGrids is unavailable.
+    Includes Myanmar / Yangon soft-soil basins critical to this project.
+    """
+    soft_soil_regions = [
+        {
+            "name": "Irrawaddy Delta / Yangon",
+            "lat": (15.5, 17.8),
+            "lon": (95.5, 97.0),
+            "props": {
+                "sand_pct": 35.0,
+                "clay_pct": 40.0,
+                "silt_pct": 25.0,
+                "bulk_density": 1.20,
+                "coarse_fragments_pct": 3.0,
+                "organic_carbon_pct": 2.0,
+            },
+        },
+        {
+            "name": "Mississippi Delta / New Orleans",
+            "lat": (29.0, 31.0),
+            "lon": (-91.0, -89.0),
+            "props": {
+                "sand_pct": 72.0,
+                "clay_pct": 8.0,
+                "silt_pct": 20.0,
+                "bulk_density": 1.15,
+                "coarse_fragments_pct": 2.0,
+                "organic_carbon_pct": 2.5,
+            },
+        },
+        {
+            "name": "Ganges Delta / Bangladesh",
+            "lat": (21.0, 24.0),
+            "lon": (88.0, 91.0),
+            "props": {
+                "sand_pct": 72.0,
+                "clay_pct": 8.0,
+                "silt_pct": 20.0,
+                "bulk_density": 1.15,
+                "coarse_fragments_pct": 2.0,
+                "organic_carbon_pct": 2.5,
+            },
+        },
+        {
+            "name": "Tokyo Bay / Soft alluvial",
+            "lat": (35.2, 35.8),
+            "lon": (139.5, 140.2),
+            "props": {
+                "sand_pct": 55.0,
+                "clay_pct": 20.0,
+                "silt_pct": 25.0,
+                "bulk_density": 1.25,
+                "coarse_fragments_pct": 4.0,
+                "organic_carbon_pct": 1.8,
+            },
+        },
+        {
+            "name": "San Francisco Bay mud",
+            "lat": (37.4, 38.0),
+            "lon": (-122.5, -122.1),
+            "props": {
+                "sand_pct": 40.0,
+                "clay_pct": 35.0,
+                "silt_pct": 25.0,
+                "bulk_density": 1.18,
+                "coarse_fragments_pct": 3.0,
+                "organic_carbon_pct": 2.2,
+            },
+        },
+        {
+            "name": "Bangkok Chao Phraya mud",
+            "lat": (13.5, 14.1),
+            "lon": (100.2, 100.8),
+            "props": {
+                "sand_pct": 30.0,
+                "clay_pct": 45.0,
+                "silt_pct": 25.0,
+                "bulk_density": 1.15,
+                "coarse_fragments_pct": 2.0,
+                "organic_carbon_pct": 2.4,
+            },
+        },
     ]
 
-   
-
-    for d in deltas:
-
-        lat_range = d["lat"]
-
-        lon_range = d["lon"]
-
+    for region in soft_soil_regions:
+        lat_range = region["lat"]
+        lon_range = region["lon"]
         if lat_range[0] <= lat <= lat_range[1] and lon_range[0] <= lon <= lon_range[1]:
-
-            is_delta = True
-
-            break
-
-           
-
-    if is_delta:
-
-        return {
-
-            "sand_pct": 72.0,
-
-            "clay_pct": 8.0,
-
-            "silt_pct": 20.0,
-
-            "bulk_density": 1.15,
-
-            "coarse_fragments_pct": 2.0,
-
-            "organic_carbon_pct": 2.5,
-
-            "source": "Deterministic Coastal/Alluvial Heuristic (Fallback)"
-
-        }
-
-   
+            props = dict(region["props"])
+            props["source"] = f"Deterministic Coastal/Alluvial Heuristic (Fallback) — {region['name']}"
+            return props
 
     return {
-
         "sand_pct": 42.0,
-
         "clay_pct": 24.0,
-
         "silt_pct": 34.0,
-
         "bulk_density": 1.42,
-
         "coarse_fragments_pct": 12.0,
-
         "organic_carbon_pct": 1.1,
-
-        "source": "Deterministic Regional Loam (Fallback)"
-
+        "source": "Deterministic Regional Loam (Fallback)",
     }
-
 
 
 def classify_soil_texture(sand: float, clay: float, silt: float) -> str:
-
     if sand >= 85.0:
-
         return "Sand"
-
     elif sand >= 70.0 and clay <= 15.0:
-
         return "Loamy Sand"
-
     elif clay >= 40.0:
-
         return "Clay"
-
     elif clay >= 35.0 and sand >= 45.0:
-
         return "Sandy Clay"
-
     elif clay >= 27.0 and silt >= 28.0:
-
         return "Clay Loam"
-
     elif silt >= 80.0:
-
         return "Silt"
-
     elif silt >= 50.0:
-
         return "Silt Loam"
-
     else:
-
         return "Loam"
 
 
-
 def evaluate_liquefaction_risk(soil_props: Dict[str, Any]) -> Dict[str, Any]:
-
     sand = soil_props["sand_pct"]
-
     clay = soil_props["clay_pct"]
-
     density = soil_props["bulk_density"]
-
     coarse = soil_props["coarse_fragments_pct"]
 
-   
-
     sand_factor = min(1.0, max(0.0, (sand - 30.0) / 45.0))
-
     clay_factor = min(1.0, max(0.0, (30.0 - clay) / 20.0))
-
     density_factor = min(1.0, max(0.0, (1.6 - density) / 0.45))
-
     coarse_factor = min(1.0, max(0.0, (25.0 - coarse) / 20.0))
-
-   
 
     lsi = sand_factor * clay_factor * density_factor * coarse_factor
 
-   
-
     if lsi >= 0.55:
-
         risk = "High"
-
         color = "red"
-
         amp_multiplier = 1.45
-
     elif lsi >= 0.25:
-
         risk = "Moderate"
-
         color = "yellow"
-
         amp_multiplier = 1.15
-
     else:
-
         risk = "Low"
-
         color = "green"
-
         amp_multiplier = 0.85
-
-       
 
     soil_class = classify_soil_texture(sand, clay, soil_props["silt_pct"])
 
-   
-
     return {
-
         "lsi_score": lsi,
-
         "classification": f"{risk} Liquefaction Risk",
-
         "color": color,
-
         "soil_class": soil_class,
-
         "amplification_multiplier": amp_multiplier,
-
         "assumptions": [
-
             "Inferred purely from shallow soil texture fractions (0-30cm) and bulk density.",
-
             "Assumes fully saturated water table conditions (typical conservative engineering baseline).",
-
-            "Does not account for local piling, artificial fill, or engineered structural foundations."
-
-        ]
-
-    } 
-
+            "Does not account for local piling, artificial fill, or engineered structural foundations.",
+        ],
+    }

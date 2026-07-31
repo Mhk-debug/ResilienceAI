@@ -51,6 +51,8 @@ All endpoints return standard HTTP status codes with JSON error bodies:
 | 500 | Internal Server Error |
 | 503 | Service Unavailable (external API failure) |
 
+**Important:** The `/api/hazard/calculate` endpoint **never returns 503** for external API failures. Instead, it returns 200 with a degraded report (`metadata.degraded: true`, `metadata.warnings` populated, `confidence` reduced). This ensures the assessment pipeline (`/api/assessment/process`) always completes.
+
 ---
 
 ## Endpoints
@@ -301,18 +303,111 @@ Calculate environmental seismic hazard for a location.
     }
   ],
   "metadata": {
-    "warnings": [],
-    "execution_time_seconds": 3.42,
-    "api_status": {
-      "USGS_Catalog": "success",
-      "SoilGrids": "success"
-    },
-    "model_version": "v1.1.2-deterministic"
+      "warnings": [],
+      "execution_time_seconds": 3.42,
+      "api_status": {
+        "USGS_Catalog": "success",
+        "SoilGrids": "success"
+      },
+      "model_version": "v1.1.2-deterministic",
+      "degraded": false
+    }
   }
-}
-```
+  ```
 
-**Example cURL:**
+  **Degraded Mode Response Example** (when SoilGrids times out):
+  ```json
+  {
+    "location": {
+      "latitude": 16.84,
+      "longitude": 96.17,
+      "place_name": "Grid Reference [16.8400, 96.1700]"
+    },
+    "hazard": {
+      "overall_score": 49.9,
+      "hazard_level": "Moderate",
+      "confidence": 0.85
+    },
+    "indicators": {
+      "seismic_zone": {
+        "value": "Zone Moderate",
+        "classification": "Moderate regional seismic energy buildup",
+        "color": "yellow"
+      },
+      "historical_activity": {
+        "value": "8 events analyzed",
+        "classification": "Moderate historical activity density",
+        "color": "yellow"
+      },
+      "soil_liquefaction": {
+        "value": "Clay Loam",
+        "classification": "Moderate Liquefaction Risk",
+        "color": "yellow"
+      },
+      "fault_proximity": {
+        "value": "65.2 km",
+        "classification": "Proximity to Sagaing Fault (Moderate Proximity)",
+        "color": "yellow"
+      }
+    },
+    "statistics": {
+      "largest_historical_earthquake": 6.8,
+      "closest_earthquake_km": 42.1,
+      "average_depth_km": 15.2,
+      "average_magnitude": 5.1,
+      "median_magnitude": 5.0,
+      "events_analyzed": 8,
+      "catalog_span_years": 50,
+      "nearest_fault_distance_km": 65.2,
+      "estimated_recurrence_interval_years": 142.3,
+      "soil_classification": "Clay Loam"
+    },
+    "environmental_context": {
+      "hazard_score": 49.9,
+      "hazard_level": "Moderate",
+      "historical_activity": {
+        "classification": "Moderate",
+        "events_within_radius": 8,
+        "largest_magnitude": 6.8
+      },
+      "faults": {
+        "distance_km": 65.2,
+        "classification": "Moderate Proximity"
+      },
+      "soil": {
+        "classification": "Moderate Liquefaction Risk",
+        "dominant_soil": "Clay Loam"
+      },
+      "ground_motion": {
+        "estimated_mmi": 6.2,
+        "estimated_pga_g": 0.08,
+        "confidence": 0.85
+      },
+      "summary": [
+        "The geographic query location has a calibrated overall Seismic Hazard Score of 49.9/100, resulting in a 'Moderate' classification.",
+        "Proximity risk is dominated by the Sagaing Fault fault system located 65.2 km away, representing a 'Moderate Proximity' rating.",
+        "Local surface soil texture consists of Clay Loam (source: Deterministic Coastal/Alluvial Heuristic (Fallback) — Irrawaddy Delta / Yangon), causing a 'Moderate Liquefaction Risk' profile with a seismic wave amplification factor of 1.15x.",
+        "Historical earthquake record shows 8 analyzed events of M4.5+ within a 100km radius over the past 50 years. The largest event registered magnitude M6.8 located 42.1km away."
+      ]
+    },
+    "events": [...],
+    "metadata": {
+      "warnings": [
+        "SoilGrids API query failed or timed out. Deterministic Coastal/Alluvial Heuristic (Fallback) — Irrawaddy Delta / Yangon utilized."
+      ],
+      "execution_time_seconds": 12.04,
+      "api_status": {
+        "USGS_Catalog": "success",
+        "SoilGrids": "fallback",
+        "engine": "normal"
+      },
+      "model_version": "v1.1.2-deterministic",
+      "degraded": true
+    }
+  }
+  ```
+
+  **Response Fields:**
 ```bash
 curl -X POST http://localhost:8000/api/hazard/calculate \
   -H "Content-Type: application/json" \

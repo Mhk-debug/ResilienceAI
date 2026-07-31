@@ -493,8 +493,12 @@ yield sse_event({
 | Initialization | Invalid payload | `400` via Pydantic validation |
 | Resilience | Model not loaded | `500` "Resilience model is not initialized" |
 | Resilience | Feature mismatch | `400` with missing field details |
-| Hazard | USGS timeout | Warning logged, continues with empty events |
-| Hazard | SoilGrids failure | Falls back to deterministic regional soil |
+| Hazard | USGS timeout (6s) | Warning logged, continues with empty events, `api_status: "timeout"`, confidence −0.2 |
+| Hazard | USGS HTTP error / JSON decode | Same as timeout, `api_status: "failure"` |
+| Hazard | SoilGrids timeout (12s overall, 5s/layer) | Falls back to deterministic regional soil profile, `api_status: "fallback"`, confidence −0.1 |
+| Hazard | SoilGrids WCS error / < 3 layers | Same as timeout |
+| Hazard | Any unexpected exception in sub-components | Caught by `_safe_*` wrappers, continues with defaults, warning added |
+| Hazard | Calibration failure / catastrophic error | **Full degraded mode**: returns complete report using only fault + soil fallback, `confidence ≈ 0.6`, `degraded: true`, `api_status.engine: "degraded"` |
 | LLM | Retrieval failure | Logged warning, continues without RAG |
 | LLM | Gemini API error | Retry 3x with exponential backoff, then `500` |
 | LLM | Invalid JSON | `safe_json_load` fallback extraction, then `500` |
@@ -504,6 +508,27 @@ yield sse_event({
 ```json
 {"type": "error", "detail": "LLM analysis failed: Gemini API timeout"}
 ```
+
+---
+
+### Hazard Engine Degradation Details
+
+The hazard engine provides **graduated degradation** — it never crashes, always returns a valid `HazardReport`:
+
+| Degradation Level | Trigger | Confidence | `metadata.degraded` | Output Quality |
+|-------------------|---------|------------|---------------------|----------------|
+| **Normal** | All APIs succeed | 0.95 (base) | `false` | Full: historical events + real soil + fault + recurrence + ShakeMap |
+| **Partial** | USGS fails | 0.75 | `true` | No historical events, soil + fault only |
+| **Partial** | SoilGrids fails | 0.85 | `true` | Real events + fallback soil + fault |
+| **Partial** | Both APIs fail | 0.60 | `true` | Fallback soil + fault only |
+| **Full** | Unexpected exception anywhere | 0.60 (min 0.20) | `true` | Fault + fallback soil only, event_score = 0 |
+
+**Key guarantees:**
+- `HazardReport` Pydantic validation **never fails**
+- Same lat/lon → **deterministic** degraded output
+- `metadata.api_status` tracks each service: `"success" | "fallback" | "timeout" | "failure" | "unavailable"`
+- `metadata.warnings` explains what happened (human-readable)
+- SSE pipeline **always completes** — `/api/assessment/process` never hangs on hazard failure
 
 ---
 

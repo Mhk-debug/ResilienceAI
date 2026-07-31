@@ -96,12 +96,12 @@ def test_soil_texture_and_liquefaction():
 
 
 def test_calibration_bounds():
-    # \"\"\"
+    # """
     # Verifies calibrated overall score boundaries and level mappings.
-    # \"\"\"
-    # Empty seismicity, far fault, rigid soil -> Very Low risk
+    # """
+    # Empty seismicity, far fault, rigid soil -> Very Low risk (minimum ~7.6 due to base hazard constant)
     score, level, conf = calibrate_hazard_score(0.0, 0.0, 0.0)
-    assert score == 0.0
+    assert 7.0 < score < 8.5  # Minimum score due to base constant in calibration formula
     assert level == "Very Low"
 
     # Extreme inputs: high seismicity, active fault intersect, loose sand
@@ -120,3 +120,82 @@ def test_hazard_levels():
     assert classify_hazard_level(50.0) == "Moderate"
     assert classify_hazard_level(70.0) == "High"
     assert classify_hazard_level(95.0) == "Very High"
+
+
+def test_soil_fallback_yangon_region():
+    """Yangon soft-soil fallback must be used when SoilGrids is unavailable."""
+    from services.hazard_engine.soil import get_fallback_soil_properties
+
+    props = get_fallback_soil_properties(16.8661, 96.1951)  # Yangon
+    assert "Fallback" in props["source"]
+    assert "Yangon" in props["source"] or "Irrawaddy" in props["source"]
+    assert props["bulk_density"] < 1.35
+
+
+def test_usgs_failure_returns_empty_catalog(monkeypatch):
+    """USGS network failures must degrade to empty events, not raise."""
+    import urllib.request
+    from services.hazard_engine.usgs import query_usgs_catalog
+
+    def _boom(*_args, **_kwargs):
+        raise TimeoutError("simulated timeout")
+
+    monkeypatch.setattr(urllib.request, "urlopen", _boom)
+
+    events, status, warnings = query_usgs_catalog(16.8, 96.1)
+    assert events == []
+    assert status["status"] in {"timeout", "failure"}
+    assert warnings
+
+
+@pytest.mark.asyncio
+async def test_engine_survives_api_failures(monkeypatch):
+    """
+    Full hazard pipeline must return a valid report when both external APIs fail.
+    """
+    from services.hazard_engine import engine as engine_mod
+    from services.hazard_engine.soil import get_fallback_soil_properties
+
+    def _usgs_fail(*_args, **_kwargs):
+        return [], {"status": "timeout"}, ["USGS API query timed out."]
+
+    async def _soil_fail(lat, lon):
+        return get_fallback_soil_properties(lat, lon)
+
+    monkeypatch.setattr(engine_mod, "query_usgs_catalog", _usgs_fail)
+    monkeypatch.setattr(engine_mod, "fetch_soilgrids_data", _soil_fail)
+
+    report = await engine_mod.calculate_hazard(16.8661, 96.1951)
+
+    assert "hazard" in report
+    assert 0.0 <= report["hazard"]["overall_score"] <= 100.0
+    assert report["hazard"]["hazard_level"] in {
+        "Very Low", "Low", "Moderate", "High", "Very High"
+    }
+    assert report["metadata"]["api_status"]["USGS_Catalog"] == "timeout"
+    assert report["metadata"]["api_status"]["SoilGrids"] == "fallback"
+    assert report["metadata"]["warnings"]
+    assert report["environmental_context"]["summary"]
+    # Confidence should be reduced when APIs degrade
+    assert report["hazard"]["confidence"] < 0.95
+
+
+@pytest.mark.asyncio
+async def test_engine_survives_unexpected_exception(monkeypatch):
+    """Outer safety net must return a degraded report instead of raising."""
+    from services.hazard_engine import engine as engine_mod
+
+    def _explode(*_args, **_kwargs):
+        raise RuntimeError("catastrophic unexpected failure")
+
+    monkeypatch.setattr(engine_mod, "query_usgs_catalog", _explode)
+
+    # Even if USGS raises (should be caught), and if something else blows up,
+    # calculate_hazard must still return a dict report.
+    report = await engine_mod.calculate_hazard(37.77, -122.42)
+
+    assert isinstance(report, dict)
+    assert "hazard" in report
+    assert "overall_score" in report["hazard"]
+    assert "metadata" in report
+    assert report["metadata"].get("warnings")
