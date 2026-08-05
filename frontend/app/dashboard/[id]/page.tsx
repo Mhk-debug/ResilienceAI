@@ -1,6 +1,6 @@
 "use client";
 
-import type { AssessmentIDResponse, EvidenceCitation, LLMAnalysisOutput } from "@/app/types";
+import type { AssessmentIDResponse, EvidenceCitation } from "@/app/types";
 import { LocalStorageManager } from "@/components/local-storage-manager";
 import { calculateRiskScore, getRiskLevel } from "@/utils/risk";
 import { formatTimeAgo } from "@/utils/tools";
@@ -9,7 +9,8 @@ import { useEffect, useState } from "react";
 import AssessmentLoading from "./AssessmentLoading";
 import AssessmentError from "./AssessmentError";
 import AssessmentNotFound from "./AssessmentNotFound";
-import { Calendar, BookOpen } from "lucide-react";
+import AssessmentForbidden from "./AssessmentForbidden";
+import { Calendar } from "lucide-react";
 import BuildingProfileCard from "./BuildingProfileCard";
 import RiskGauge from "./RiskGauge";
 import RiskInterpretation from "./RiskInterpretation";
@@ -28,17 +29,27 @@ function DashboardPage() {
     const [evidence, setEvidence] = useState<Record<string, EvidenceCitation>>({});
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [isForbidden, setIsForbidden] = useState(false);
 
     const loadAssessment = async () => {
         setIsLoading(true);
         setError(null);
+        setIsForbidden(false);
 
         try {
             const response = await fetch(
-                `http://127.0.0.1:8000/api/assessment/${id}`,
+                `/api/assessment/${id}`,
+                {
+                    credentials: "include",
+                },
             );
 
             if (response.status == 404) {
+                return;
+            }
+
+            if (response.status == 403) {
+                setIsForbidden(true);
                 return;
             }
 
@@ -85,6 +96,10 @@ function DashboardPage() {
 
     if (isLoading) {
         return <AssessmentLoading />;
+    }
+
+    if (isForbidden) {
+        return <AssessmentForbidden />;
     }
 
     if (error) {

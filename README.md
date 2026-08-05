@@ -395,25 +395,89 @@ ResilienceAI/
 
 ## Environment Variables
 
-The application requires the following environment variables:
+The application uses the following environment variables:
 
-| Variable                     | Description                                            |
-| ---------------------------- | ------------------------------------------------------ |
-| `GEMINI_API_KEY`             | API key used to access Google's Gemini API             |
-| `DATABASE_URL`               | PostgreSQL connection string for the Neon database     |
-| `SECRET_KEY`                 | Secret key for JWT token signing (backend)             |
-| `ALGORITHM`                  | Algorithm for JWT token signing (backend, e.g., HS256) |
-| `ACCESS_TOKEN_EXPIRE_MINUTES`| Expiration time for JWT access tokens (backend)        |
+| Variable                       | Required                       | Default                         | Description                                                                 |
+| ------------------------------ | ------------------------------ | ------------------------------- | --------------------------------------------------------------------------- |
+| `DATABASE_URL`                 | **Yes**                        | —                               | PostgreSQL connection string for the Neon database                          |
+| `GEMINI_API_KEY`               | **Yes**                        | —                               | API key used to access Google's Gemini API                                  |
+| `SECRET_KEY`                   | **Prod only**                  | `"super-secret-key"`            | Secret key for JWT token signing (backend). Must be set to a strong random value in production |
+| `ALGORITHM`                    | No                             | `"HS256"`                       | Algorithm for JWT token signing (backend, e.g., HS256)                      |
+| `ACCESS_TOKEN_EXPIRE_MINUTES`  | No                             | `30`                            | Expiration time (minutes) for JWT access tokens and the auth cookie (backend) |
+| `ENVIRONMENT`                  | No (`"production"` in prod)    | —                               | Set to `"production"` to enable secure (`Secure`/HTTPS-only) auth cookies. Any other value (or unset) uses insecure cookies for local HTTP development |
+| `SMTP_HOST`                    | **Prod only\***                | `"localhost"`                   | SMTP server hostname                                                         |
+| `SMTP_PORT`                    | No                             | `587`                           | SMTP server port (TLS)                                                       |
+| `SMTP_USER`                    | **Prod only\***                | `""`                            | SMTP authentication username. When empty, the email service runs in console-log (dev) mode |
+| `SMTP_PASS`                    | **Prod only\***                | `""`                            | SMTP authentication password. When empty, the email service runs in console-log (dev) mode |
+| `SMTP_FROM`                    | No                             | `"noreply@resilienceai.app"`    | SMTP sender ("From") email address                                           |
+| `FRONTEND_URL`                 | No                             | `"http://localhost:3000"`       | Public URL of the frontend, used to build email verification / email-change links. Set to the deployed frontend URL in production |
+| `JWT_SECRET`                   | **Prod only**                  | `"super-secret-key"`            | JWT secret used by the Next.js middleware (frontend). Must be set to a strong random value in production |
+| `NEXT_PUBLIC_API_URL`          | No                             | `"http://127.0.0.1:8000"`      | Backend API URL for SSE proxy (frontend)                                     |
 
-Example:
+> **\*** `SMTP_HOST`, `SMTP_USER`, and `SMTP_PASS` are required in production only if you need live email functionality (email verification, email-change confirmation, etc.). When they are **not** configured, the `EmailService` falls back to **console logging** — it logs the email that *would* have been sent, but nothing is actually delivered. This is the intended behavior for local development.
+
+### Email Auth Flow (backend `services/auth.py`)
+
+ResilienceAI's email authentication uses these variables:
+
+* **`SECRET_KEY`** — signs all JWT access tokens. In development it falls back to `"super-secret-key"`; in production you **must** provide a strong, random value (e.g., `python -c "import secrets; print(secrets.token_hex(32))"`).
+* **`ALGORITHM`** — JWT signing algorithm (default `HS256`).
+* **`ACCESS_TOKEN_EXPIRE_MINUTES`** — controls both the JWT `exp` claim **and** the max-age of the `access_token` HTTP-only cookie (default `30` minutes).
+* **`ENVIRONMENT`** — set to `"production"` so the auth cookie is created with `Secure=True`. In local development (unset or anything else), the cookie is sent over plain HTTP, which is required for `http://localhost`.
+* **`SMTP_USER` / `SMTP_PASS`** — presence of both (along with `SMTP_HOST`) determines whether emails are sent over real SMTP or merely logged to the console. The service requires all three to be set; if any is missing/empty it falls back to console logging and returns `False`.
+* **`FRONTEND_URL`** — the base URL embedded in email verification and email-change confirmation links (`{FRONTEND_URL}/auth/verify?token=...`). Must point to the frontend that is reachable by the user (defaults to `http://localhost:3000`).
+
+### Required Variables
 
 ```env
 GEMINI_API_KEY="your_gemini_api_key"
 DATABASE_URL="your_neon_database_connection_string"
+```
+
+### All Variables Example
+
+```env
+# Required (both dev and prod)
+GEMINI_API_KEY="your_gemini_api_key"
+DATABASE_URL="your_neon_database_connection_string"
+
+# Authentication — REQUIRED in production (backend)
 SECRET_KEY="a_long_random_string_for_jwt_security"
 ALGORITHM="HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES=30
+ENVIRONMENT="production"
+
+# SMTP / Email — required in production for live emails; can be omitted or left empty in dev
+SMTP_HOST="smtp.gmail.com"
+SMTP_PORT=587
+SMTP_USER="your_email@gmail.com"
+SMTP_PASS="your_app_password"
+SMTP_FROM="noreply@resilienceai.app"
+FRONTEND_URL="https://your-deployed-frontend.example.com"
+
+# Frontend — REQUIRED in production (frontend)
+JWT_SECRET="a_long_random_string_for_jwt_security"
+NEXT_PUBLIC_API_URL="https://your-deployed-backend.example.com"
 ```
+
+---
+
+## Development vs. Production Differences
+
+### Local Development
+
+* **`ENVIRONMENT`** is left unset (or set to `"development"`). Auth cookies are **not** marked `Secure`, so they work over plain `http://localhost`.
+* **`SECRET_KEY`** and **`JWT_SECRET`** fall back to `"super-secret-key"` — fine for local testing, never use in production.
+* **SMTP vars** (`SMTP_USER`, `SMTP_PASS`, `SMTP_HOST`) can be omitted. The `EmailService` then **logs emails to the console** instead of sending them, so you can still see the verification link that would have been delivered.
+* **`FRONTEND_URL`** defaults to `http://localhost:3000`, so verification/email-change links point at your local Next.js dev server.
+
+### Production
+
+* Set **`ENVIRONMENT="production"`** so the `access_token` cookie is sent with `Secure=True` (HTTPS-only). Leaving it unset in production will cause the browser to reject the cookie over HTTPS.
+* Set a strong **`SECRET_KEY`** (backend JWT signing) and **`JWT_SECRET`** (frontend middleware). Do not use the built-in defaults.
+* Configure real **SMTP** credentials (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`) so verification and email-change emails are actually delivered. Without them, emails are only logged and users will never receive a verification link.
+* Set **`FRONTEND_URL`** to your deployed frontend URL so emailed links point to the correct host.
+* Set **`NEXT_PUBLIC_API_URL`** to your deployed backend URL.
 
 ---
 

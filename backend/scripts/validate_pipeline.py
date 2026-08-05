@@ -241,7 +241,6 @@ def run_scenario(name: str, raw_input: dict, model, expected_features, llm_servi
         "hazard_score": env_ctx["hazard_score"],
         "hazard_level": env_ctx["hazard_level"],
         "retrieved_chunks": len(results) if llm_service.retriever is not None else 0,
-        "llm_confidence": llm_result.confidence,
         "total_time": total,
     }
 
