@@ -4,10 +4,12 @@ import logging
 import time
 import traceback
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
+from typing import List
+from pydantic import BaseModel
 from database import get_db, Assessment
 from database.models import User
 from services.auth import get_current_user_from_cookie
@@ -370,6 +372,101 @@ def list_user_assessments(
         }
         for a in assessments
     ]
+
+
+# ---------------------------------------------------------------------------
+# Assessment history endpoint
+# ---------------------------------------------------------------------------
+#
+# Dedicated, paginated history view for the assessment history page.
+# Returns a stable response shape ({ items, total, limit, offset }) that the
+# frontend can render with proper "Showing X of Y" labels, ordering controls,
+# and infinite-scroll / "load more" pagination in the future.
+#
+# The bare-array response from `list_user_assessments` (above) is preserved
+# for backward compatibility with the home page redirect logic that still
+# reads `assessments[0]?.id`.
+# ---------------------------------------------------------------------------
+
+
+class AssessmentSummaryItem(BaseModel):
+    """A single lightweight row in the assessment history list."""
+
+    id: str
+    created_at: str
+    place_name: str | None = None
+    latitude: float
+    longitude: float
+    resilience_score: float
+    hazard_score: float
+    hazard_level: str
+
+
+class AssessmentHistoryResponse(BaseModel):
+    """Paginated response wrapper for the assessment history page."""
+
+    items: List[AssessmentSummaryItem]
+    total: int
+    limit: int
+    offset: int
+
+
+@router.get(
+    "/history",
+    response_model=AssessmentHistoryResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Paginated assessment history for the authenticated user",
+    description=(
+        "Returns the current user's assessments as a paginated list ordered by "
+        "creation date descending. The response includes the total count so the "
+        "UI can render 'Showing X of Y' labels and 'Load more' pagination."
+    ),
+)
+def list_assessment_history(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_cookie),
+    limit: int = Query(20, ge=1, le=100, description="Page size (1-100)"),
+    offset: int = Query(0, ge=0, description="Number of rows to skip"),
+) -> AssessmentHistoryResponse:
+    """
+    Paginated history of assessments belonging to the current user.
+
+    Lightweight payload — JSONB columns (profile, building, hazard, llm) are
+    intentionally excluded; the detail page fetches them on demand.
+    """
+    base_query = db.query(Assessment).filter(
+        Assessment.user_id == current_user.id
+    )
+
+    total = base_query.count()
+
+    rows = (
+        base_query.order_by(Assessment.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    items = [
+        AssessmentSummaryItem(
+            id=str(a.id),
+            created_at=a.created_at.isoformat(),
+            place_name=a.place_name,
+            latitude=a.latitude,
+            longitude=a.longitude,
+            resilience_score=a.resilience_score,
+            hazard_score=a.hazard_score,
+            hazard_level=a.hazard_level,
+        )
+        for a in rows
+    ]
+
+    return AssessmentHistoryResponse(
+        items=items,
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get(
