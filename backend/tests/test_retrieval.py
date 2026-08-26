@@ -15,6 +15,12 @@ import shutil
 # Add backend to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+# RAG tests need the optional retrieval stack (sentence-transformers +
+# chromadb). Skip the whole module cleanly when they are not installed —
+# the application itself treats the retriever as optional.
+pytest.importorskip("sentence_transformers")
+pytest.importorskip("chromadb")
+
 from services.retrieval.chunk_loader import (
     ChunkLoader,
     KnowledgeChunk,

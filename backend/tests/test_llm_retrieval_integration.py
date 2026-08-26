@@ -168,7 +168,7 @@ def sample_retrieval_results() -> List[MockRetrievalResult]:
             chunk_id="doc1__chunk_0",
             text="Mud mortar stone buildings are highly vulnerable to seismic shaking. "
                  "Typical failure modes include out-of-plane wall collapse and corner separation.",
-            score=0.85,
+            score=0.912,
             metadata={
                 "category": "building_vulnerability",
                 "title": "Mud Mortar Stone Vulnerability",
@@ -182,7 +182,7 @@ def sample_retrieval_results() -> List[MockRetrievalResult]:
             chunk_id="doc2__chunk_0",
             text="Soft clay soils (Site Class E) amplify seismic waves by 2-3x. "
                  "Liquefaction risk is high in saturated loose sands and silts.",
-            score=0.78,
+            score=0.734,
             metadata={
                 "category": "environmental_hazards",
                 "title": "Soil Amplification",
@@ -226,7 +226,10 @@ class TestBackwardCompatibility:
         """Prompt should not contain RETRIEVED KNOWLEDGE when no retriever."""
         service = LLMService(client=mock_genai_client)
         service.analyze(mock_input)
-        assert "RETRIEVED KNOWLEDGE" not in mock_genai_client.last_prompt
+        # The fixed prompt instructions mention "RETRIEVED KNOWLEDGE" (in the
+        # output requirements), so assert on the section header (with colon)
+        # that only appears when knowledge is actually injected.
+        assert "RETRIEVED KNOWLEDGE:" not in mock_genai_client.last_prompt
 
 
 # ──────────────────────────────────────────────────────────────
@@ -282,9 +285,11 @@ class TestRetrievalIntegration:
         assert "FEMA" in prompt
         assert "USGS" in prompt
         assert "building_vulnerability" in prompt
-        # Should NOT contain scores
-        assert "0.85" not in prompt
-        assert "0.78" not in prompt
+        # Should NOT contain scores (sample scores use unique values so they
+        # cannot collide with the fixed "confidence": 0.85 example in the
+        # prompt's output-format instructions)
+        assert "0.912" not in prompt
+        assert "0.734" not in prompt
 
     def test_prompt_contains_reference_numbers(self, mock_genai_client, mock_input, sample_retrieval_results):
         """Prompt should number references (Reference 1, Reference 2)."""
@@ -329,7 +334,7 @@ class TestEmptyResults:
         retriever = MockRetriever(results=[])
         service = LLMService(client=mock_genai_client, retriever=retriever)
         service.analyze(mock_input)
-        assert "RETRIEVED KNOWLEDGE" not in mock_genai_client.last_prompt
+        assert "RETRIEVED KNOWLEDGE:" not in mock_genai_client.last_prompt
 
     def test_empty_results_still_returns_valid_output(self, mock_genai_client, mock_input):
         """analyze() should still return valid output with empty results."""
@@ -380,7 +385,7 @@ class TestFailureHandling:
         retriever.should_fail = True
         service = LLMService(client=mock_genai_client, retriever=retriever)
         service.analyze(mock_input)
-        assert "RETRIEVED KNOWLEDGE" not in mock_genai_client.last_prompt
+        assert "RETRIEVED KNOWLEDGE:" not in mock_genai_client.last_prompt
 
     def test_retrieval_failure_prompt_unchanged(self, mock_genai_client, mock_input):
         """Prompt after failure should match no-retriever baseline."""
@@ -451,8 +456,8 @@ class TestFormatting:
     def test_format_no_scores(self, sample_retrieval_results):
         """Formatted output must not contain similarity scores."""
         formatted = LLMService._format_retrieved_knowledge(sample_retrieval_results)
-        assert "0.85" not in formatted
-        assert "0.78" not in formatted
+        assert "0.912" not in formatted
+        assert "0.734" not in formatted
         assert "score" not in formatted.lower()
 
     def test_format_contains_metadata(self, sample_retrieval_results):
@@ -580,7 +585,7 @@ class TestEvidenceMapBuilding:
         assert "doc2__chunk_0" not in evidence_map  # Not cited
         assert isinstance(evidence_map["doc1__chunk_0"], EvidenceCitation)
         assert evidence_map["doc1__chunk_0"].source_org == "FEMA"
-        assert evidence_map["doc1__chunk_0"].relevance_score == 0.85
+        assert evidence_map["doc1__chunk_0"].relevance_score == 0.912
 
     def test_build_map_with_invalid_ids(self, sample_retrieval_results):
         """Invalid cited IDs should be filtered out."""

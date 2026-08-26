@@ -13,6 +13,10 @@ from routes.llm import router as llm_router
 from routes.assessment import router as assessment_router
 from routes.auth import router as auth_router
 
+# Ensure the schema exists on a fresh database (idempotent, no-op when
+# tables already exist). The database must exist before boot.
+from database.session import Base, engine
+
 logger = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -27,6 +31,10 @@ async def lifespan(app: FastAPI):
             raise FileNotFoundError(
                 f"Required files missing in artifacts space. Check {MODEL_PATH} or {SCHEMA_PATH}"
             )
+        
+        # Create any missing tables (users, assessments) so a fresh database
+        # works without running an explicit migration/reset step first.
+        Base.metadata.create_all(bind=engine)
         
         # joblib loading is synchronous/blocking, perfect for startup phase
         model = joblib.load(MODEL_PATH)

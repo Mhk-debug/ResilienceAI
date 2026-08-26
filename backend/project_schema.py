@@ -205,7 +205,7 @@ class AssessmentIDResponse(BaseModel):
     """Pydantic model representing the complete Assessment output."""
     id: UUID
     created_at: datetime
-    place_name: str
+    place_name: str | None = None
     latitude: float
     longitude: float
     resilience_score: float

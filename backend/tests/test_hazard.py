@@ -99,9 +99,12 @@ def test_calibration_bounds():
     # \"\"\"
     # Verifies calibrated overall score boundaries and level mappings.
     # \"\"\"
-    # Empty seismicity, far fault, rigid soil -> Very Low risk
+    # Empty seismicity, far fault, rigid soil -> Very Low risk.
+    # Note: the calibration applies a documented +2.5 baseline offset
+    # (backend/docs/hazard_engine.md), so the floor is
+    # 100 * (1 - exp(-2.5 / 31.8)) ≈ 7.6, not 0.0.
     score, level, conf = calibrate_hazard_score(0.0, 0.0, 0.0)
-    assert score == 0.0
+    assert score == pytest.approx(7.6, abs=0.1)
     assert level == "Very Low"
 
     # Extreme inputs: high seismicity, active fault intersect, loose sand

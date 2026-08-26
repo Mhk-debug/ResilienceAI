@@ -81,8 +81,13 @@ def clean_schema(schema: Dict[str, Any]) -> Dict[str, Any]:
 
 class GenAIClient:
     def __init__(self, model: str = "gemini-2.5-flash", api_key: Optional[str] = None):
-        self.client = genai.Client(api_key=api_key or os.getenv("GEMINI_API_KEY"))
+        # Resolve the key from explicit arg, GEMINI_API_KEY, or GOOGLE_API_KEY.
+        # If none is present, the client is left unset and generate() raises a
+        # clear, actionable error — the app must still boot without an AI key.
+        key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        self.client = genai.Client(api_key=key) if key else None
         self.model = model
+        self._missing_key = not key
 
     def generate(
         self,
@@ -90,6 +95,12 @@ class GenAIClient:
         schema: Dict[str, Any],
         max_retries: int = 3
     ) -> Dict[str, Any]:
+
+        if self.client is None:
+            raise RuntimeError(
+                "Gemini API key is not configured. "
+                "Set GEMINI_API_KEY (or GOOGLE_API_KEY) in your .env file."
+            )
 
         schema = clean_schema(schema)
 

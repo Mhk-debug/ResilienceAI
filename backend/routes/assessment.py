@@ -35,12 +35,22 @@ async def get_place_name(
     latitude: float,
     longitude: float,
 ) -> str | None:
-    location = await asyncio.to_thread(
-        geolocator.reverse,
-        (latitude, longitude),
-    )
-
-    return getattr(location, "address", None) if location else None
+    """Reverse-geocode a coordinate. Returns None on any failure so the
+    assessment can still be saved (place_name is stored nullable)."""
+    try:
+        location = await asyncio.to_thread(
+            geolocator.reverse,
+            (latitude, longitude),
+            timeout=5,
+        )
+        return getattr(location, "address", None) if location else None
+    except Exception:
+        logger.warning(
+            "Reverse geocoding failed for (%s, %s); storing without a place name.",
+            latitude,
+            longitude,
+        )
+        return None
 
 @router.post("/save", status_code=status.HTTP_201_CREATED, summary="Persist a complete earthquake risk assessment")
 async def save_assessment(
