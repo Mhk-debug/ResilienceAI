@@ -403,6 +403,56 @@ class TestFailureHandling:
 
 
 # ──────────────────────────────────────────────────────────────
+# Tests: Deterministic Fallback (Gemini unavailable)
+# ──────────────────────────────────────────────────────────────
+
+
+class FailingGenAIClient(MockGenAIClient):
+    """A mock client that always raises — forces the deterministic fallback."""
+
+    def generate(self, prompt: str, schema: Dict[str, Any], max_retries: int = 3) -> Dict[str, Any]:
+        raise RuntimeError("Simulated Gemini outage")
+
+
+class TestFallbackAnalysis:
+    """LLMService must degrade to a deterministic analysis when Gemini fails."""
+
+    def test_fallback_fills_schema(self, mock_input):
+        service = LLMService(client=FailingGenAIClient())
+        result, evidence_map = service.analyze(mock_input)
+        assert isinstance(result, LLMAnalysisOutput)
+        assert len(result.summary) == 6
+        assert len(result.recommendations) == 5
+        assert result.confidence < 1.0
+        assert result.risk_interpretation.structural_assessment
+        assert result.risk_interpretation.environmental_assessment
+        assert evidence_map == {}
+
+    def test_fallback_is_data_aware(self, mock_input):
+        service = LLMService(client=FailingGenAIClient())
+        result, _ = service.analyze(mock_input)
+        # Environmental data is reflected in the generated text
+        assert "85" in result.summary[1].text  # mock env hazard_score = 85.0
+        # All recommendation priorities are valid
+        priorities = {r.priority for r in result.recommendations}
+        assert priorities <= {"red", "orange", "yellow", "green"}
+        assert priorities
+
+    def test_fallback_yields_vulnerability_recs(self, mock_input):
+        service = LLMService(client=FailingGenAIClient())
+        result, _ = service.analyze(mock_input)
+        titles = " ".join(r.title.lower() for r in result.recommendations)
+        # mock building has mud-mortar-stone substructure
+        assert "wall" in titles or "retrofit" in titles
+
+    def test_real_client_used_when_available(self, mock_genai_client, mock_input):
+        service = LLMService(client=mock_genai_client)
+        result, _ = service.analyze(mock_input)
+        assert mock_genai_client.generate_call_count == 1
+        assert result.confidence == 0.85  # from the client, not the fallback
+
+
+# ──────────────────────────────────────────────────────────────
 # Tests: Response Schema
 # ──────────────────────────────────────────────────────────────
 
