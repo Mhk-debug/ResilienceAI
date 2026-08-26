@@ -222,6 +222,7 @@ class LLMService:
             result = self._build_fallback_analysis(
                 building=input_data.building_context,
                 env=input_data.environmental_context,
+                retrieved_results=retrieved_results,
             )
         llm_elapsed = time.time() - start_llm
 
@@ -468,6 +469,7 @@ class LLMService:
     def _build_fallback_analysis(
         building: BuildingLLMContext,
         env: EnvironmentalContext,
+        retrieved_results: Optional[List[Any]] = None,
     ) -> Dict[str, Any]:
         """
         Build a rule-based analysis from the building + environmental context.
@@ -476,6 +478,10 @@ class LLMService:
         network failure, or quota). Produces the same strict schema as the
         LLM: 6 summary items, 5 recommendations, risk_interpretation, and a
         lowered confidence so readers know it is not model-generated.
+
+        When retrieval produced results, the most relevant chunks are attached
+        as evidence_ids (category-matched) so the fallback output shows the
+        same evidence citations as a Gemini-generated analysis.
         """
         structural = building.structural
         material = building.material
@@ -692,7 +698,7 @@ class LLMService:
             env_txt += f" on amplifying {soil_class} soils"
         env_txt += "."
 
-        return {
+        analysis = {
             "summary": summary,
             "recommendations": recommendations,
             "risk_interpretation": {
@@ -706,6 +712,62 @@ class LLMService:
             },
             "confidence": 0.55,
         }
+
+        # Attach retrieved knowledge as evidence so the citation cards render.
+        if retrieved_results:
+            LLMService._attach_fallback_evidence(analysis, retrieved_results)
+
+        return analysis
+
+    @staticmethod
+    def _attach_fallback_evidence(
+        analysis: Dict[str, Any],
+        retrieved_results: List[Any],
+    ) -> None:
+        """Assign retrieved chunk IDs to fallback summary/rec items by category."""
+        summary = analysis["summary"]
+        recommendations = analysis["recommendations"]
+
+        # Which summary item each knowledge category supports.
+        summary_slot = {
+            "building_vulnerability": 0,   # building description
+            "environmental_hazards": 3,    # soil item
+            "earthquake_safety": 4,        # historical-events item
+            "local_context": 5,            # overall-risk item
+            "mitigation": 5,
+        }
+        # Substring matched against recommendation titles.
+        rec_match = {
+            "building_vulnerability": ("anchor", "upgrade", "retrofit", "inspect", "drift"),
+            "environmental_hazards": ("secure", "prepare"),
+            "earthquake_safety": ("prepare", "emergency", "drift"),
+            "mitigation": ("annual", "maintain", "retrofit", "inspect"),
+            "local_context": ("prepare", "maintain"),
+        }
+
+        def attach(target_list, item_idx, chunk_id):
+            if 0 > item_idx or item_idx >= len(target_list):
+                return
+            ids = target_list[item_idx]["evidence_ids"]
+            if chunk_id not in ids:
+                ids.append(chunk_id)
+
+        for r in retrieved_results:
+            category = (r.metadata or {}).get("category", "")
+            # summary slot
+            slot = summary_slot.get(category)
+            if slot is not None:
+                attach(summary, slot, r.chunk_id)
+            # recommendation match (a chunk may support one summary AND one rec)
+            keywords = rec_match.get(category, ())
+            if keywords:
+                target = next(
+                    (i for i, rc in enumerate(recommendations)
+                     if any(k in rc["title"].lower() for k in keywords)),
+                    None,
+                )
+                if target is not None:
+                    attach(recommendations, target, r.chunk_id)
 
     # -----------------------------------------------------
     # PROMPT ENGINE

@@ -445,6 +445,20 @@ class TestFallbackAnalysis:
         # mock building has mud-mortar-stone substructure
         assert "wall" in titles or "retrofit" in titles
 
+    def test_fallback_attaches_retrieved_evidence(self, mock_input, sample_retrieval_results):
+        retriever = MockRetriever(results=sample_retrieval_results)
+        service = LLMService(client=FailingGenAIClient(), retriever=retriever)
+        result, evidence_map = service.analyze(mock_input)
+        assert evidence_map  # citations built from retrieved chunks
+        cited_ids = {i for s in result.summary for i in s.evidence_ids}
+        cited_ids |= {i for r in result.recommendations for i in r.evidence_ids}
+        assert cited_ids
+        assert set(cited_ids) <= set(evidence_map.keys())
+        # at least one recommendation carries a citation (for the expandable cards)
+        assert any(r.evidence_ids for r in result.recommendations)
+        ev = next(iter(evidence_map.values()))
+        assert ev.source_org and ev.excerpt
+
     def test_real_client_used_when_available(self, mock_genai_client, mock_input):
         service = LLMService(client=mock_genai_client)
         result, _ = service.analyze(mock_input)
