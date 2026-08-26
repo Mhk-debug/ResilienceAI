@@ -58,6 +58,24 @@ GEMINI_API_KEY=your-gemini-api-key
 | `DATABASE_URL` | Neon PostgreSQL connection string | `postgresql://user:***@ep-xxx.neon.tech/neondb?sslmode=require` |
 | `GEMINI_API_KEY` | Google AI Studio API key | `AIzaSy...` |
 
+**Optional Variables:**
+| Variable | Default | Required in Prod | Description |
+|----------|---------|-----------------|-------------|
+| `SECRET_KEY` | `"super-secret-key"` | — | JWT signing secret |
+| `ALGORITHM` | `"HS256"` | — | JWT algorithm |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | — | JWT token expiry |
+| `ENVIRONMENT` | — | — | Set to `"production"` for secure cookies |
+| `SMTP_HOST` | `"localhost"` | **Yes\*** | SMTP server host |
+| `SMTP_PORT` | `587` | — | SMTP server port |
+| `SMTP_USER` | `""` | **Yes\*** | SMTP username |
+| `SMTP_PASS` | `""` | **Yes\*** | SMTP password |
+| `SMTP_FROM` | `"noreply@resilienceai.app"` | — | SMTP sender address |
+| `FRONTEND_URL` | `"http://localhost:3000"` | — | Frontend URL for email links |
+| `JWT_SECRET` | `"super-secret-key"` | — | JWT secret for Next.js middleware |
+| `NEXT_PUBLIC_API_URL` | `"http://127.0.0.1:8000"` | — | Backend URL for frontend SSE proxy |
+
+> **\*** `SMTP_HOST`, `SMTP_USER`, and `SMTP_PASS` are required in production if you need email functionality (verification, password reset, etc.). Without them, the email service falls back to console logging.
+
 ### 5. Initialize Database
 ```bash
 # Tables created automatically on first run via SQLAlchemy

@@ -9,8 +9,12 @@ const SECRET_KEY = new TextEncoder().encode(
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Protect /dashboard and /form
-  if (pathname.startsWith("/dashboard") || pathname.startsWith("/form")) {
+  // Protect /dashboard, /form, and /assessments
+  if (
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/form") ||
+    pathname.startsWith("/assessments")
+  ) {
     const token = request.cookies.get("access_token")?.value;
 
     if (!token) {
@@ -31,5 +35,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/form/:path*"],
+  matcher: ["/dashboard/:path*", "/form/:path*", "/assessments/:path*"],
 };

@@ -26,7 +26,6 @@ import FormSectionCard from "./FormSectionCard";
 import FormActionArea from "./FormActionArea";
 import Footer from "@/components/footer";
 import BuildingScalePresetsDisplay from "./BuildingScalePresetsDisplay";
-import { BASE_API_URL } from "@/utils/constants";
 import MultiStageLoadingDisplay, {
     type StageStatusMap,
 } from "./MultiStageLoadingDisplay";
@@ -114,7 +113,7 @@ export default function FormPage() {
 
         try {
             const response = await fetch(
-                `${BASE_API_URL}/api/assessment/process`,
+                "/api/sse/assessment/process",
                 {
                     method: "POST",
                     headers: {

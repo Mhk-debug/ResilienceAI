@@ -536,8 +536,8 @@ OUTPUT REQUIREMENTS:
    - overall reasoning
 
    for each of the risk_interpretation string:
-   MAXIMUM WORD COUNT: 45
-   MINIMUM WORD COUNT: 35
+   MAXIMUM WORD COUNT: 35
+   MINIMUM WORD COUNT: 25
    
 -----------------------------
 OUTPUT FORMAT (STRICT JSON):
