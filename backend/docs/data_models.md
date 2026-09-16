@@ -78,9 +78,9 @@ class BuildingLLMContext(BaseModel):
     "height_feets": 24
   },
   "material": {
-    "roof_type": "Corrugated Galvanized Iron (CGI) sheets",
+    "roof_type": "Bamboo / Timber - light roof",
     "foundation_type": "Reinforced Concrete (RC) / Cement",
-    "ground_floor_type": "Reinforced Concrete (RC) slab floor"
+    "ground_floor_type": "Reinforced Concrete (RC) floor"
   },
   "substructure": {
     "mud_mortar_stone": false,

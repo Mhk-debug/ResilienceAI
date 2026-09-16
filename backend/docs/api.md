@@ -102,23 +102,26 @@ Calculate building resilience score using the XGBoost model.
 | `w` | Wooden / Timber |
 | `i` | Reinforced Concrete / Cement |
 | `u` | Cement - Stone masonry |
-| `h` | Bamboo / Adobe / Mud pile |
+| `h` | Other / unclassified |
 
 **Roof Type Codes:**
 | Code | Description |
 |------|-------------|
-| `n` | Bamboo / Timber / Mud |
-| `q` | Corrugated Galvanized Iron (CGI) |
-| `x` | Reinforced Concrete slab |
+| `n` | Bamboo / Timber — light roof (thatch, light tile, CGI/tin) |
+| `q` | Bamboo / Timber — heavy roof (thick mud-covered timber) |
+| `x` | Reinforced Concrete slab (RCC/RB/RBC) |
 
 **Ground Floor Type Codes:**
 | Code | Description |
 |------|-------------|
 | `f` | Mud / Soil |
-| `v` | Brick / Stone with cement mortar |
-| `x` | RC slab |
-| `m` | Timber / Wood planking |
-| `z` | Other composite |
+| `v` | Reinforced Concrete (RC) floor |
+| `x` | Brick / Stone floor |
+| `m` | Other / unclassified |
+| `z` | Timber / Wood planking |
+
+> Code meanings were re-verified against the training data (2026-09-16) — joint distribution,
+> prevalence and measured damage rank agree for every code. See `richtor_mappings.py`.
 
 **Response (200):**
 ```json
@@ -133,9 +136,9 @@ Calculate building resilience score using the XGBoost model.
       "height_feets": 24
     },
     "material": {
-      "roof_type": "Corrugated Galvanized Iron (CGI) sheets",
+      "roof_type": "Bamboo / Timber - light roof",
       "foundation_type": "Reinforced Concrete (RC) / Cement",
-      "ground_floor_type": "Reinforced Concrete (RC) slab floor"
+      "ground_floor_type": "Reinforced Concrete (RC) floor"
     },
     "substructure": {
       "mud_mortar_stone": false,
@@ -346,9 +349,9 @@ Generate AI-powered risk interpretation and recommendations.
       "height_feets": 24
     },
     "material": {
-      "roof_type": "Corrugated Galvanized Iron (CGI) sheets",
+      "roof_type": "Bamboo / Timber - light roof",
       "foundation_type": "Reinforced Concrete (RC) / Cement",
-      "ground_floor_type": "Reinforced Concrete (RC) slab floor"
+      "ground_floor_type": "Reinforced Concrete (RC) floor"
     },
     "substructure": {
       "mud_mortar_stone": false,

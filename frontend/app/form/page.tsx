@@ -636,10 +636,10 @@ export default function FormPage() {
                                 <option value="u">
                                     Cement-Stone Masonry Foundation
                                 </option>
-                                <option value="w">Timber Foundation</option>
+                                <option value="w">Bamboo / Timber Foundation</option>
                                 <option value="r">Mud-Stone Foundation</option>
                                 <option value="h">
-                                    Bamboo / Adobe Foundation
+                                    Other / Unclassified Foundation
                                 </option>
                             </select>
                             <p className="text-[10px] text-slate-500 leading-normal">
@@ -661,12 +661,14 @@ export default function FormPage() {
                                 className="w-full bg-white border border-slate-200 text-slate-900 rounded-lg py-2.5 px-3.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 transition-all cursor-pointer"
                                 id="select-roof"
                             >
-                                <option value="q">Corrugated Metal Roof</option>
                                 <option value="x">
-                                    Reinforced Concrete Roof
+                                    Reinforced Concrete Slab Roof (RCC)
                                 </option>
                                 <option value="n">
-                                    Traditional Bamboo / Timber Roof
+                                    Bamboo / Timber — Light Roof (thatch, CGI/tin)
+                                </option>
+                                <option value="q">
+                                    Bamboo / Timber — Heavy Roof (mud-covered)
                                 </option>
                             </select>
                             <p className="text-[10px] text-slate-500 leading-normal">
@@ -688,13 +690,13 @@ export default function FormPage() {
                                 className="w-full bg-white border border-slate-200 text-slate-900 rounded-lg py-2.5 px-3.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 transition-all cursor-pointer"
                                 id="select-ground-floor"
                             >
-                                <option value="x">
+                                <option value="v">
                                     Reinforced Concrete Floor
                                 </option>
-                                <option value="v">Brick / Stone Floor</option>
-                                <option value="m">Timber Floor</option>
+                                <option value="m">Other / Unclassified Floor</option>
+                                <option value="z">Timber Floor</option>
+                                <option value="x">Brick / Stone Floor</option>
                                 <option value="f">Mud Floor</option>
-                                <option value="z">Other</option>
                             </select>
                             <p className="text-[10px] text-slate-500 leading-normal">
                                 Basal standard for shear transmission.

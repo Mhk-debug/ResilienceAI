@@ -23,26 +23,29 @@ export interface SelectionOption {
   description?: string;
 }
 
+// Codes and their meanings were verified against the training data on 2026-09-16 (joint
+// distribution + prevalence + measured damage rank, all three agreeing). `encodedValue` is the code
+// actually sent to the API and consumed by the model — never change it, only the labels.
 export const FOUNDATION_OPTIONS: SelectionOption[] = [
   { value: "reinforced_concrete", label: "Reinforced Concrete Foundation", encodedValue: "i", description: "Rigid footing suitable for high lateral seismic loads." },
   { value: "cement_stone_masonry", label: "Cement-Stone Masonry Foundation", encodedValue: "u", description: "Stone units laid in cement mortar; semi-rigid." },
-  { value: "timber", label: "Timber Foundation", encodedValue: "w", description: "Wooden posts or piles; susceptible to rot or shifting unless anchored." },
+  { value: "bamboo_timber", label: "Bamboo / Timber Foundation", encodedValue: "w", description: "Wooden posts or piles; susceptible to rot or shifting unless anchored." },
   { value: "mud_stone_masonry", label: "Mud-Stone Foundation", encodedValue: "r", description: "Unreinforced stone in mud mortar; high seismic vulnerability." },
-  { value: "bamboo_adobe", label: "Bamboo / Adobe Foundation", encodedValue: "h", description: "Lightweight or natural materials; highly deformable." },
+  { value: "other_foundation", label: "Other / Unclassified Foundation", encodedValue: "h", description: "None of the four named foundations; treat as non-engineered." },
 ];
 
 export const ROOF_OPTIONS: SelectionOption[] = [
-  { value: "corrugated_metal", label: "Corrugated Metal Roof", encodedValue: "q", description: "Lightweight steel sheet cladding on timber or metal trusses." },
-  { value: "reinforced_concrete_roof", label: "Reinforced Concrete Roof", encodedValue: "x", description: "Heavy cast slab providing robust diaphragm but increasing building weight." },
-  { value: "traditional_bamboo_timber", label: "Traditional Bamboo / Timber Roof", encodedValue: "n", description: "Thatch or light wood tiling; flexible but can collapse if poorly connected." },
+  { value: "reinforced_concrete_roof", label: "Reinforced Concrete Slab Roof (RCC)", encodedValue: "x", description: "Heavy cast slab providing robust diaphragm; safest when anchored to RC columns." },
+  { value: "light_bamboo_timber_roof", label: "Bamboo / Timber — Light Roof (thatch, light tile, CGI/tin)", encodedValue: "n", description: "Light cladding class; low mass, so low inertial demand on the walls. Enter corrugated metal (CGI) roofs here." },
+  { value: "heavy_bamboo_timber_roof", label: "Bamboo / Timber — Heavy Roof (thick mud-covered timber)", encodedValue: "q", description: "Heavy traditional roof; raises the centre of mass and shows the worst damage of the three roof types in the 2015 Nepal data." },
 ];
 
 export const GROUND_FLOOR_OPTIONS: SelectionOption[] = [
-  { value: "reinforced_concrete_floor", label: "Reinforced Concrete Floor", encodedValue: "x", description: "Slab-on-grade; provides strong lower-level rigidity." },
-  { value: "brick_stone", label: "Brick / Stone Floor", encodedValue: "v", description: "Masonry tiles or cobblestone; susceptible to shifting under dynamic loading." },
-  { value: "timber_floor", label: "Timber Floor", encodedValue: "m", description: "Suspended wooden floor; flexible." },
+  { value: "reinforced_concrete_floor", label: "Reinforced Concrete Floor", encodedValue: "v", description: "Concrete slab floor; provides strong lower-level rigidity." },
+  { value: "other_floor", label: "Other / Unclassified Floor", encodedValue: "m", description: "Alternative floor compositions." },
+  { value: "timber_floor", label: "Timber Floor", encodedValue: "z", description: "Suspended wooden floor; flexible." },
+  { value: "brick_stone", label: "Brick / Stone Floor", encodedValue: "x", description: "Masonry tiles or cobblestone; susceptible to shifting under dynamic loading." },
   { value: "mud_floor", label: "Mud Floor", encodedValue: "f", description: "Compacted soil; no structural shear transmission." },
-  { value: "other_floor", label: "Other", encodedValue: "z", description: "Alternative floor compositions." },
 ];
 
 export interface BuildingLLMContext {

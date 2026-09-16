@@ -101,8 +101,8 @@ SCENARIOS = [
             "area_sq_ft": 1200,
             "height_ft": 45,
             "foundation_type": "u",  # Cement-Stone Masonry
-            "roof_type": "q",        # Corrugated Metal
-            "ground_floor_type": "v", # Brick/Stone floor
+            "roof_type": "q",        # Heavy bamboo/timber roof (mud-covered)
+            "ground_floor_type": "v", # RC floor
             "has_superstructure_mud_mortar_stone": 0,
             "has_superstructure_rc_engineered": 0,
             "has_superstructure_cement_mortar_brick": 1,
