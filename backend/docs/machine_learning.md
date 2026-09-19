@@ -130,7 +130,10 @@ mud-stone profile from 2 km to 200 km; 3.56 → 1.23 for engineered RC), which i
 
 Grouped protocol: 120,000-row district-stratified subsample, 3 folds, 0 % of test rows in a seen
 district, 500 rounds / depth 6 / lr 0.08. The 40,000-row replication gives the same ordering
-(33.44 % vs 29.53 %); both are recorded in `results_grouped_v3.json`.
+(33.44 % vs 29.53 %); **both** configurations are recorded in
+`backend/models/seismic_damage_v3/model_metadata.json` (`grouped_cv.n_rows_120k_3folds` and
+`n_rows_40k_3folds`). The research workspace's `results_grouped_v3.json` holds whichever run was
+executed last.
 
 ---
 
