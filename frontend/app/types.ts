@@ -12,6 +12,15 @@ export interface AssessmentPayload {
   has_superstructure_rc_non_engineered: 0 | 1;
   has_superstructure_adobe_mud: 0 | 1;
   has_superstructure_timber: 0 | 1;
+  has_superstructure_stone_flag: 0 | 1;
+  has_superstructure_cement_mortar_stone: 0 | 1;
+  has_superstructure_mud_mortar_brick: 0 | 1;
+  has_superstructure_bamboo: 0 | 1;
+  has_superstructure_other: 0 | 1;
+  land_surface_condition: "Flat" | "Moderate slope" | "Steep slope";
+  position: "Not attached" | "Attached-1 side" | "Attached-2 side" | "Attached-3 side";
+  plan_configuration: string;
+  other_floor_type: string;
   area_sq_ft: number;
   height_ft: number;
 }
@@ -52,12 +61,22 @@ export interface BuildingLLMContext {
   structural: Record<string, any>;
   material: Record<string, any>;
   substructure: Record<string, any>;
+  /** Damage-model output: expected grade, grade distribution, severe-damage probability. */
+  damage?: Record<string, any>;
 }
 
 export interface ResilienceAssessmentResponse {
   status: string;
   resilience_score: number;
   building_llm_context: BuildingLLMContext;
+  /** Damage model v3 outputs. Absent on assessments saved before the model change. */
+  model_version?: string | null;
+  expected_grade?: number | null;
+  grade_class?: number | null;
+  probabilities?: Record<string, number> | null;
+  p_severe_grade45?: number | null;
+  used_fallback_model?: boolean | null;
+  flags?: string[] | null;
 }
 
 export interface IndicatorItem {
@@ -106,6 +125,15 @@ export interface LLMSoilContext {
 export interface LLMGroundMotionContext {
   estimated_mmi: number;
   estimated_pga_g: number;
+  /** The catalogued event that governs the reported ground motion (absent when none in radius). */
+  governing_event?: {
+    id?: string;
+    magnitude: number;
+    distance_km: number;
+    depth_km: number;
+    date?: string;
+    place?: string;
+  } | null;
   confidence: number;
 }
 
@@ -181,6 +209,15 @@ export interface AssessmentRequest {
   has_superstructure_rc_non_engineered: number;
   has_superstructure_adobe_mud: number;
   has_superstructure_timber: number;
+  has_superstructure_stone_flag: number;
+  has_superstructure_cement_mortar_stone: number;
+  has_superstructure_mud_mortar_brick: number;
+  has_superstructure_bamboo: number;
+  has_superstructure_other: number;
+  land_surface_condition: string;
+  position: string;
+  plan_configuration: string;
+  other_floor_type: string;
 }
 
 export interface BuildingInput {
@@ -197,6 +234,15 @@ export interface BuildingInput {
     has_superstructure_rc_non_engineered: number;
     has_superstructure_adobe_mud: number;
     has_superstructure_timber: number;
+    has_superstructure_stone_flag: number;
+    has_superstructure_cement_mortar_stone: number;
+    has_superstructure_mud_mortar_brick: number;
+    has_superstructure_bamboo: number;
+    has_superstructure_other: number;
+    land_surface_condition: string;
+    position: string;
+    plan_configuration: string;
+    other_floor_type: string;
 }
 
 export interface AssessmentIDResponse {

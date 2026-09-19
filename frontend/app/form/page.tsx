@@ -10,6 +10,9 @@ import {
     AlertCircle,
     Info,
     Scaling,
+    Mountain,
+    Map,
+    Grid3x3,
 } from "lucide-react";
 import { useState } from "react";
 import { useForm, type Path, type Resolver } from "react-hook-form";
@@ -19,6 +22,10 @@ import {
     DEFAULT_FORM_VALUES,
     heightTemplates,
     plinchAreaTemplates,
+    LAND_SURFACE_OPTIONS,
+    POSITION_OPTIONS,
+    PLAN_CONFIGURATION_OPTIONS,
+    OTHER_FLOOR_TYPE_OPTIONS,
 } from "./data";
 import StructuralComponentCheckbox from "./StructuralComponentCheckbox";
 import FormHeader from "./FormHeader";
@@ -29,6 +36,380 @@ import BuildingScalePresetsDisplay from "./BuildingScalePresetsDisplay";
 import MultiStageLoadingDisplay, {
     type StageStatusMap,
 } from "./MultiStageLoadingDisplay";
+
+/* ─── Inline SVG diagrams for the terrain cross-section selector ─── */
+
+/* Terrain geometry. The sloped cards used to place a hand-rotated body and then
+   draw the windows and roof in the un-rotated frame, so on a slope the roof and
+   windows drifted off the walls and the whole building floated above the ground
+   line. Both curves are defined once here; the house transform is derived from
+   the curve that draws the ground, so the base stays on the line. */
+type Quad = [[number, number], [number, number], [number, number]];
+
+const TERRAIN_MODERATE: Quad[] = [
+    [[5, 65], [30, 60], [60, 52]],
+    [[60, 52], [90, 44], [115, 40]],
+];
+
+const TERRAIN_STEEP: Quad[] = [
+    [[5, 70], [30, 60], [60, 45]],
+    [[60, 45], [90, 30], [115, 20]],
+];
+
+const quadPoint = (seg: Quad, t: number): [number, number] => {
+    const [[x0, y0], [cx, cy], [x1, y1]] = seg;
+    const u = 1 - t;
+    return [
+        u * u * x0 + 2 * u * t * cx + t * t * x1,
+        u * u * y0 + 2 * u * t * cy + t * t * y1,
+    ];
+};
+
+/** y of the terrain at a given x, by sampling the curve (curves are gentle, so
+ *  the nearest sample is exact enough for a 120 × 80 icon). */
+const terrainY = (segments: Quad[], x: number): number => {
+    let bestY = quadPoint(segments[0], 0)[1];
+    let bestDx = Number.POSITIVE_INFINITY;
+    for (const seg of segments) {
+        for (let i = 0; i <= 240; i += 1) {
+            const [px, py] = quadPoint(seg, i / 240);
+            const dx = Math.abs(px - x);
+            if (dx < bestDx) {
+                bestDx = dx;
+                bestY = py;
+            }
+        }
+    }
+    return bestY;
+};
+
+/** Place a building on the terrain: the base spans [centre − half, centre + half]
+ *  and is tilted to the chord between the two ground points, so both base corners
+ *  — and therefore the walls, windows and roof, which share this transform — sit
+ *  exactly on the ground line. */
+const houseTransform = (segments: Quad[], centreX: number, halfWidth: number): string => {
+    const left = centreX - halfWidth;
+    const right = centreX + halfWidth;
+    const yLeft = terrainY(segments, left);
+    const yRight = terrainY(segments, right);
+    const angle = (Math.atan2(yRight - yLeft, right - left) * 180) / Math.PI;
+    const yBase = (yLeft + yRight) / 2;
+    return `translate(${centreX} ${yBase.toFixed(2)}) rotate(${angle.toFixed(1)})`;
+};
+
+const quadPath = (segments: Quad[]): string =>
+    `M${segments[0][0][0]} ${segments[0][0][1]}` +
+    segments.map(([, c, e]) => ` Q ${c[0]} ${c[1]} ${e[0]} ${e[1]}`).join("");
+
+const slopeFill = (segments: Quad[]): string => {
+    const last = segments[segments.length - 1][2];
+    return `${quadPath(segments)} L${last[0]} 78 L${segments[0][0][0]} 78 Z`;
+};
+
+function TerrainFlat({ active }: { active: boolean }) {
+    return (
+        <svg viewBox="0 0 120 80" className="w-full h-full" aria-hidden="true">
+            <line
+                x1="5" y1="58" x2="115" y2="58"
+                stroke={active ? "#b45309" : "#a8a29e"}
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeDasharray="0"
+            />
+            <path
+                d="M5 58 Q 30 56 60 58 Q 90 60 115 58"
+                fill={active ? "#d4a574" : "#e7e5e4"}
+                stroke="none"
+            />
+            <rect
+                x="42" y="28" width="22" height="30"
+                rx="1"
+                fill={active ? "#fbbf24" : "#d6d3d1"}
+                stroke={active ? "#b45309" : "#a8a29e"}
+                strokeWidth="1.5"
+            />
+            <rect x="46" y="32" width="6" height="5" rx="0.5" fill={active ? "#92400e" : "#78716c"} />
+            <rect x="54" y="32" width="6" height="5" rx="0.5" fill={active ? "#92400e" : "#78716c"} />
+            <rect x="48" y="50" width="8" height="8" rx="0.5" fill={active ? "#92400e" : "#78716c"} />
+            <polygon
+                points="42,28 53,18 64,28"
+                fill={active ? "#dc2626" : "#a8a29e"}
+                stroke={active ? "#b45309" : "#a8a29e"}
+                strokeWidth="1"
+            />
+            <text x="60" y="76" textAnchor="middle" fontSize="6" fill={active ? "#78716c" : "#a8a29e"} fontFamily="sans-serif">
+                flat ground
+            </text>
+        </svg>
+    );
+}
+
+function TerrainModerate({ active }: { active: boolean }) {
+    return (
+        <svg viewBox="0 0 120 80" className="w-full h-full" aria-hidden="true">
+            <path
+                d={quadPath(TERRAIN_MODERATE)}
+                fill="none"
+                stroke={active ? "#b45309" : "#a8a29e"}
+                strokeWidth="2.5"
+                strokeLinecap="round"
+            />
+            <path
+                d={slopeFill(TERRAIN_MODERATE)}
+                fill={active ? "#d4a574" : "#e7e5e4"}
+                stroke="none"
+            />
+            {/* body, windows and roof share one transform → they cannot drift apart,
+                and the base sits on the ground line (base at y=0, up is −y) */}
+            <g transform={houseTransform(TERRAIN_MODERATE, 55, 10)}>
+                <rect
+                    x="-10" y="-30" width="20" height="30"
+                    rx="1"
+                    fill={active ? "#fbbf24" : "#d6d3d1"}
+                    stroke={active ? "#b45309" : "#a8a29e"}
+                    strokeWidth="1.5"
+                />
+                <rect x="-6" y="-26" width="5" height="4" rx="0.5" fill={active ? "#92400e" : "#78716c"} />
+                <rect x="1" y="-26" width="5" height="4" rx="0.5" fill={active ? "#92400e" : "#78716c"} />
+                <polygon
+                    points="-10,-30 0,-38 10,-30"
+                    fill={active ? "#dc2626" : "#a8a29e"}
+                    stroke={active ? "#b45309" : "#a8a29e"}
+                    strokeWidth="1"
+                />
+            </g>
+            <text x="60" y="76" textAnchor="middle" fontSize="6" fill={active ? "#78716c" : "#a8a29e"} fontFamily="sans-serif">
+                gentle slope
+            </text>
+        </svg>
+    );
+}
+
+function TerrainSteep({ active }: { active: boolean }) {
+    return (
+        <svg viewBox="0 0 120 80" className="w-full h-full" aria-hidden="true">
+            <path
+                d={quadPath(TERRAIN_STEEP)}
+                fill="none"
+                stroke={active ? "#b45309" : "#a8a29e"}
+                strokeWidth="2.5"
+                strokeLinecap="round"
+            />
+            <path
+                d={slopeFill(TERRAIN_STEEP)}
+                fill={active ? "#d4a574" : "#e7e5e4"}
+                stroke="none"
+            />
+            <g transform={houseTransform(TERRAIN_STEEP, 51, 9)}>
+                <rect
+                    x="-9" y="-28" width="18" height="28"
+                    rx="1"
+                    fill={active ? "#fbbf24" : "#d6d3d1"}
+                    stroke={active ? "#b45309" : "#a8a29e"}
+                    strokeWidth="1.5"
+                />
+                <rect x="-6" y="-24" width="4" height="4" rx="0.5" fill={active ? "#92400e" : "#78716c"} />
+                <rect x="1" y="-24" width="4" height="4" rx="0.5" fill={active ? "#92400e" : "#78716c"} />
+                <polygon
+                    points="-9,-28 0,-36 9,-28"
+                    fill={active ? "#dc2626" : "#a8a29e"}
+                    stroke={active ? "#b45309" : "#a8a29e"}
+                    strokeWidth="1"
+                />
+            </g>
+            <text x="60" y="76" textAnchor="middle" fontSize="6" fill={active ? "#78716c" : "#a8a29e"} fontFamily="sans-serif">
+                steep slope
+            </text>
+        </svg>
+    );
+}
+
+/* ─── Position SVG diagrams ─── */
+
+function PositionNotAttached({ active }: { active: boolean }) {
+    return (
+        <svg viewBox="0 0 100 60" className="w-full h-full" aria-hidden="true">
+            <rect
+                x="35" y="10" width="30" height="35" rx="2"
+                fill={active ? "#a78bfa" : "#d6d3d1"}
+                stroke={active ? "#7c3aed" : "#a8a29e"}
+                strokeWidth="1.5"
+            />
+            <rect x="40" y="15" width="8" height="6" rx="1" fill={active ? "#4c1d95" : "#78716c"} />
+            <rect x="52" y="15" width="8" height="6" rx="1" fill={active ? "#4c1d95" : "#78716c"} />
+            <rect x="43" y="35" width="10" height="10" rx="1" fill={active ? "#4c1d95" : "#78716c"} />
+            <line x1="35" y1="45" x2="65" y2="45" stroke={active ? "#7c3aed" : "#a8a29e"} strokeWidth="1.5" />
+        </svg>
+    );
+}
+
+function Position1Side({ active }: { active: boolean }) {
+    return (
+        <svg viewBox="0 0 100 60" className="w-full h-full" aria-hidden="true">
+            <rect
+                x="10" y="10" width="22" height="35" rx="2"
+                fill={active ? "#c4b5fd" : "#e7e5e4"}
+                stroke={active ? "#a78bfa" : "#d6d3d1"}
+                strokeWidth="1"
+            />
+            <rect
+                x="32" y="10" width="30" height="35" rx="2"
+                fill={active ? "#a78bfa" : "#d6d3d1"}
+                stroke={active ? "#7c3aed" : "#a8a29e"}
+                strokeWidth="1.5"
+            />
+            <rect x="37" y="15" width="8" height="6" rx="1" fill={active ? "#4c1d95" : "#78716c"} />
+            <rect x="49" y="15" width="8" height="6" rx="1" fill={active ? "#4c1d95" : "#78716c"} />
+            <rect x="40" y="35" width="10" height="10" rx="1" fill={active ? "#4c1d95" : "#78716c"} />
+            <line x1="32" y1="45" x2="62" y2="45" stroke={active ? "#7c3aed" : "#a8a29e"} strokeWidth="1.5" />
+            <line x1="32" y1="10" x2="32" y2="45" stroke={active ? "#dc2626" : "#a8a29e"} strokeWidth="1.5" strokeDasharray="3 2" />
+        </svg>
+    );
+}
+
+function Position2Side({ active }: { active: boolean }) {
+    return (
+        <svg viewBox="0 0 100 60" className="w-full h-full" aria-hidden="true">
+            <rect
+                x="5" y="10" width="22" height="35" rx="2"
+                fill={active ? "#c4b5fd" : "#e7e5e4"}
+                stroke={active ? "#a78bfa" : "#d6d3d1"}
+                strokeWidth="1"
+            />
+            <rect
+                x="27" y="10" width="28" height="35" rx="2"
+                fill={active ? "#a78bfa" : "#d6d3d1"}
+                stroke={active ? "#7c3aed" : "#a8a29e"}
+                strokeWidth="1.5"
+            />
+            <rect
+                x="55" y="10" width="22" height="35" rx="2"
+                fill={active ? "#c4b5fd" : "#e7e5e4"}
+                stroke={active ? "#a78bfa" : "#d6d3d1"}
+                strokeWidth="1"
+            />
+            <rect x="32" y="15" width="7" height="5" rx="1" fill={active ? "#4c1d95" : "#78716c"} />
+            <rect x="42" y="15" width="7" height="5" rx="1" fill={active ? "#4c1d95" : "#78716c"} />
+            <rect x="36" y="35" width="10" height="10" rx="1" fill={active ? "#4c1d95" : "#78716c"} />
+            <line x1="27" y1="45" x2="55" y2="45" stroke={active ? "#7c3aed" : "#a8a29e"} strokeWidth="1.5" />
+            <line x1="27" y1="10" x2="27" y2="45" stroke={active ? "#dc2626" : "#a8a29e"} strokeWidth="1.5" strokeDasharray="3 2" />
+            <line x1="55" y1="10" x2="55" y2="45" stroke={active ? "#dc2626" : "#a8a29e"} strokeWidth="1.5" strokeDasharray="3 2" />
+        </svg>
+    );
+}
+
+function Position3Side({ active }: { active: boolean }) {
+    return (
+        <svg viewBox="0 0 100 60" className="w-full h-full" aria-hidden="true">
+            <rect
+                x="5" y="10" width="18" height="35" rx="2"
+                fill={active ? "#c4b5fd" : "#e7e5e4"}
+                stroke={active ? "#a78bfa" : "#d6d3d1"}
+                strokeWidth="1"
+            />
+            <rect
+                x="23" y="10" width="28" height="35" rx="2"
+                fill={active ? "#a78bfa" : "#d6d3d1"}
+                stroke={active ? "#7c3aed" : "#a8a29e"}
+                strokeWidth="1.5"
+            />
+            <rect
+                x="51" y="10" width="18" height="35" rx="2"
+                fill={active ? "#c4b5fd" : "#e7e5e4"}
+                stroke={active ? "#a78bfa" : "#d6d3d1"}
+                strokeWidth="1"
+            />
+            <rect
+                x="23" y="0" width="28" height="10" rx="2"
+                fill={active ? "#c4b5fd" : "#e7e5e4"}
+                stroke={active ? "#a78bfa" : "#d6d3d1"}
+                strokeWidth="1"
+            />
+            <rect x="28" y="16" width="7" height="5" rx="1" fill={active ? "#4c1d95" : "#78716c"} />
+            <rect x="39" y="16" width="7" height="5" rx="1" fill={active ? "#4c1d95" : "#78716c"} />
+            <rect x="32" y="35" width="10" height="10" rx="1" fill={active ? "#4c1d95" : "#78716c"} />
+            <line x1="23" y1="45" x2="51" y2="45" stroke={active ? "#7c3aed" : "#a8a29e"} strokeWidth="1.5" />
+            <line x1="23" y1="10" x2="23" y2="45" stroke={active ? "#dc2626" : "#a8a29e"} strokeWidth="1.5" strokeDasharray="3 2" />
+            <line x1="51" y1="10" x2="51" y2="45" stroke={active ? "#dc2626" : "#a8a29e"} strokeWidth="1.5" strokeDasharray="3 2" />
+            <line x1="23" y1="10" x2="51" y2="10" stroke={active ? "#dc2626" : "#a8a29e"} strokeWidth="1.5" strokeDasharray="3 2" />
+        </svg>
+    );
+}
+
+/* ─── Plan Configuration footprint SVGs ─── */
+
+function FootprintSVG({ shape, active }: { shape: string; active: boolean }) {
+    const fill = active ? "#818cf8" : "#d6d3d1";
+    const stroke = active ? "#4f46e5" : "#a8a29e";
+    const sw = "1.5";
+
+    switch (shape) {
+        case "Rectangular":
+            return (
+                <svg viewBox="0 0 40 40" className="w-full h-full" aria-hidden="true">
+                    <rect x="6" y="10" width="28" height="20" rx="1" fill={fill} stroke={stroke} strokeWidth={sw} />
+                </svg>
+            );
+        case "Square":
+            return (
+                <svg viewBox="0 0 40 40" className="w-full h-full" aria-hidden="true">
+                    <rect x="8" y="8" width="24" height="24" rx="1" fill={fill} stroke={stroke} strokeWidth={sw} />
+                </svg>
+            );
+        case "L-shape":
+            return (
+                <svg viewBox="0 0 40 40" className="w-full h-full" aria-hidden="true">
+                    <path d="M8 8 L22 8 L22 20 L32 20 L32 32 L8 32 Z" fill={fill} stroke={stroke} strokeWidth={sw} />
+                </svg>
+            );
+        case "T-shape":
+            return (
+                <svg viewBox="0 0 40 40" className="w-full h-full" aria-hidden="true">
+                    <path d="M6 8 L34 8 L34 16 L25 16 L25 32 L15 32 L15 16 L6 16 Z" fill={fill} stroke={stroke} strokeWidth={sw} />
+                </svg>
+            );
+        case "U-shape":
+            return (
+                <svg viewBox="0 0 40 40" className="w-full h-full" aria-hidden="true">
+                    <path d="M8 8 L16 8 L16 24 L24 24 L24 8 L32 8 L32 32 L8 32 Z" fill={fill} stroke={stroke} strokeWidth={sw} />
+                </svg>
+            );
+        case "E-shape":
+            return (
+                <svg viewBox="0 0 40 40" className="w-full h-full" aria-hidden="true">
+                    <path d="M8 8 L32 8 L32 13 L20 13 L20 18 L30 18 L30 23 L20 23 L20 28 L32 28 L32 32 L8 32 Z" fill={fill} stroke={stroke} strokeWidth={sw} />
+                </svg>
+            );
+        case "H-shape":
+            return (
+                <svg viewBox="0 0 40 40" className="w-full h-full" aria-hidden="true">
+                    <path d="M8 8 L16 8 L16 16 L24 16 L24 8 L32 8 L32 32 L24 32 L24 24 L16 24 L16 32 L8 32 Z" fill={fill} stroke={stroke} strokeWidth={sw} />
+                </svg>
+            );
+        case "Multi-projected":
+            return (
+                <svg viewBox="0 0 40 40" className="w-full h-full" aria-hidden="true">
+                    <path d="M14 6 L26 6 L26 14 L34 14 L34 26 L26 26 L26 34 L14 34 L14 26 L6 26 L6 14 L14 14 Z" fill={fill} stroke={stroke} strokeWidth={sw} />
+                </svg>
+            );
+        case "Building with Central Courtyard":
+            return (
+                <svg viewBox="0 0 40 40" className="w-full h-full" aria-hidden="true">
+                    <rect x="6" y="6" width="28" height="28" rx="1" fill={fill} stroke={stroke} strokeWidth={sw} />
+                    <rect x="14" y="14" width="12" height="12" rx="1" fill="white" stroke={stroke} strokeWidth="1" />
+                </svg>
+            );
+        case "Others":
+            return (
+                <svg viewBox="0 0 40 40" className="w-full h-full" aria-hidden="true">
+                    <polygon points="20,6 34,14 30,30 10,30 6,14" fill={fill} stroke={stroke} strokeWidth={sw} />
+                    <text x="20" y="24" textAnchor="middle" fontSize="10" fill={active ? "#4f46e5" : "#78716c"} fontWeight="bold" fontFamily="sans-serif">?</text>
+                </svg>
+            );
+        default:
+            return null;
+    }
+}
 
 export default function FormPage() {
     const router = useRouter();
@@ -98,11 +479,8 @@ export default function FormPage() {
 
         // Reset assessment UI state
         setIsLoading(true);
-
         setIsComplete(false);
-
         setStatusText("Preparing your assessment...");
-
         setStageStatuses({
             initializing: "pending",
             resilience: "pending",
@@ -149,7 +527,6 @@ export default function FormPage() {
              */
             while (true) {
                 const { done, value } = await reader.read();
-
                 if (done) {
                     break;
                 }
@@ -176,7 +553,6 @@ export default function FormPage() {
                     const dataLine = event
                         .split("\n")
                         .find((line) => line.startsWith("data:"));
-
                     if (!dataLine) {
                         continue;
                     }
@@ -188,7 +564,6 @@ export default function FormPage() {
                     }
 
                     let parsed;
-
                     try {
                         parsed = JSON.parse(jsonString);
                     } catch (parseError) {
@@ -209,7 +584,6 @@ export default function FormPage() {
                     if (parsed.type === "stage_started") {
                         setStageStatuses((previous) => ({
                             ...previous,
-
                             [parsed.stage]: "active",
                         }));
 
@@ -228,7 +602,6 @@ export default function FormPage() {
                     if (parsed.type === "stage_completed") {
                         setStageStatuses((previous) => ({
                             ...previous,
-
                             [parsed.stage]: "completed",
                         }));
 
@@ -245,13 +618,9 @@ export default function FormPage() {
 
                         setStageStatuses({
                             initializing: "completed",
-
                             resilience: "completed",
-
                             hazard: "completed",
-
                             llm: "completed",
-
                             saving: "completed",
                         });
 
@@ -288,10 +657,8 @@ export default function FormPage() {
                 const dataLine = buffer
                     .split("\n")
                     .find((line) => line.startsWith("data:"));
-
                 if (dataLine) {
                     const jsonString = dataLine.replace(/^data:\s*/, "").trim();
-
                     if (jsonString) {
                         try {
                             const parsed = JSON.parse(jsonString);
@@ -313,8 +680,7 @@ export default function FormPage() {
                              * data.
                              */
                             if (
-                                err instanceof Error &&
-                                err.message !== "Unexpected end of JSON input"
+                                err instanceof Error && err.message !== "Unexpected end of JSON input"
                             ) {
                                 throw err;
                             }
@@ -370,6 +736,12 @@ export default function FormPage() {
         reset(DEFAULT_FORM_VALUES);
         clearErrors();
     };
+
+    /* Watched values for the new visual selectors */
+    const watchedLandSurface = watch("land_surface_condition");
+    const watchedPosition = watch("position");
+    const watchedPlanConfig = watch("plan_configuration");
+    const watchedOtherFloorType = watch("other_floor_type");
 
     return (
         <div className="flex min-h-full flex-col bg-background">
@@ -704,7 +1076,7 @@ export default function FormPage() {
                         </div>
                     </FormSectionCard>
 
-                    {/* Section 4: Structural Condition */}
+                    {/* Section 4: Structural Condition — original 6 + 5 new */}
                     <FormSectionCard
                         title="Structural Components"
                         desc="Toggle active superstructures on the layout
@@ -765,9 +1137,254 @@ export default function FormPage() {
                             name="has_superstructure_timber"
                             color="red"
                         />
+
+                        {/* NEW: Stone Flag */}
+                        <StructuralComponentCheckbox
+                            control={control}
+                            title="Stone Flag / Dressed Stone"
+                            desc="Cut and dressed stone used as structural element."
+                            name="has_superstructure_stone_flag"
+                            color="stone"
+                        />
+
+                        {/* NEW: Cement Mortar Stone */}
+                        <StructuralComponentCheckbox
+                            control={control}
+                            title="Stone & Cement Mortar"
+                            desc="Stone walls joined with cement mortar for strength."
+                            name="has_superstructure_cement_mortar_stone"
+                            color="slate"
+                        />
+
+                        {/* NEW: Mud Mortar Brick */}
+                        <StructuralComponentCheckbox
+                            control={control}
+                            title="Brick & Mud Mortar"
+                            desc="Brick walls joined with weak mud mortar."
+                            name="has_superstructure_mud_mortar_brick"
+                            color="orange"
+                        />
+
+                        {/* NEW: Bamboo */}
+                        <StructuralComponentCheckbox
+                            control={control}
+                            title="Bamboo"
+                            desc="Structural framing using bamboo poles."
+                            name="has_superstructure_bamboo"
+                            color="lime"
+                        />
+
+                        {/* NEW: Other */}
+                        <StructuralComponentCheckbox
+                            control={control}
+                            title="Other Material"
+                            desc="Any other structural material not listed above."
+                            name="has_superstructure_other"
+                            color="neutral"
+                        />
                     </FormSectionCard>
 
-                    {/* Section 5: Location Context */}
+                    {/* NEW Section 5: Land Surface Condition — visual terrain cross-section */}
+                    <div className="rounded-xl bg-card border border-border shadow-card overflow-hidden">
+                        <div className="flex items-center gap-3 px-5 py-4 border-b border-amber-100 bg-amber-50/60">
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100">
+                                <Mountain className="h-4 w-4 text-amber-700" />
+                            </span>
+                            <div>
+                                <p className="text-sm font-semibold text-foreground">
+                                    Land Surface Condition
+                                </p>
+                                <p className="text-xs text-amber-700/70">
+                                    What does the ground under the building look like?
+                                </p>
+                            </div>
+                        </div>
+                        <div className="px-5 py-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            {LAND_SURFACE_OPTIONS.map((opt) => {
+                                const isActive = watchedLandSurface === opt.value;
+                                return (
+                                    <button
+                                        key={opt.value}
+                                        type="button"
+                                        onClick={() => setValue("land_surface_condition", opt.value)}
+                                        className={`flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all cursor-pointer select-none ${
+                                            isActive
+                                                ? "border-amber-500 bg-amber-50 shadow-sm"
+                                                : "border-slate-200 bg-white hover:border-amber-300 hover:bg-amber-50/30"
+                                        }`}
+                                    >
+                                        <div className="w-full h-20">
+                                            {opt.value === "Flat" && <TerrainFlat active={isActive} />}
+                                            {opt.value === "Moderate slope" && <TerrainModerate active={isActive} />}
+                                            {opt.value === "Steep slope" && <TerrainSteep active={isActive} />}
+                                        </div>
+                                        <span className={`text-xs font-semibold ${isActive ? "text-amber-800" : "text-slate-700"}`}>
+                                            {opt.label}
+                                        </span>
+                                        <span className="text-[10px] text-slate-500 leading-snug text-center">
+                                            {opt.description}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        {errors.land_surface_condition && (
+                            <span className="text-[10px] text-rose-600 font-mono block px-5 pb-3">
+                                {errors.land_surface_condition.message}
+                            </span>
+                        )}
+                    </div>
+
+                    {/* NEW Section 6: Building Position — visual attachment diagram */}
+                    <div className="rounded-xl bg-card border border-border shadow-card overflow-hidden">
+                        <div className="flex items-center gap-3 px-5 py-4 border-b border-violet-100 bg-violet-50/60">
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-100">
+                                <Map className="h-4 w-4 text-violet-700" />
+                            </span>
+                            <div>
+                                <p className="text-sm font-semibold text-foreground">
+                                    Building Position
+                                </p>
+                                <p className="text-xs text-violet-700/70">
+                                    How many sides of the building are attached to neighbours?
+                                </p>
+                            </div>
+                        </div>
+                        <div className="px-5 py-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            {POSITION_OPTIONS.map((opt) => {
+                                const isActive = watchedPosition === opt.value;
+                                return (
+                                    <button
+                                        key={opt.value}
+                                        type="button"
+                                        onClick={() => setValue("position", opt.value)}
+                                        className={`flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all cursor-pointer select-none ${
+                                            isActive
+                                                ? "border-violet-500 bg-violet-50 shadow-sm"
+                                                : "border-slate-200 bg-white hover:border-violet-300 hover:bg-violet-50/30"
+                                        }`}
+                                    >
+                                        <div className="w-full h-14">
+                                            {opt.value === "Not attached" && <PositionNotAttached active={isActive} />}
+                                            {opt.value === "Attached-1 side" && <Position1Side active={isActive} />}
+                                            {opt.value === "Attached-2 side" && <Position2Side active={isActive} />}
+                                            {opt.value === "Attached-3 side" && <Position3Side active={isActive} />}
+                                        </div>
+                                        <span className={`text-[11px] font-semibold text-center leading-tight ${isActive ? "text-violet-800" : "text-slate-700"}`}>
+                                            {opt.label}
+                                        </span>
+                                        <span className="text-[9px] text-slate-500 leading-snug text-center">
+                                            {opt.description}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        {errors.position && (
+                            <span className="text-[10px] text-rose-600 font-mono block px-5 pb-3">
+                                {errors.position.message}
+                            </span>
+                        )}
+                    </div>
+
+                    {/* NEW Section 7: Plan Configuration — footprint grid */}
+                    <div className="rounded-xl bg-card border border-border shadow-card overflow-hidden">
+                        <div className="flex items-center gap-3 px-5 py-4 border-b border-indigo-100 bg-indigo-50/60">
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-100">
+                                <Grid3x3 className="h-4 w-4 text-indigo-700" />
+                            </span>
+                            <div>
+                                <p className="text-sm font-semibold text-foreground">
+                                    Plan Configuration
+                                </p>
+                                <p className="text-xs text-indigo-700/70">
+                                    Footprint shape in plan view
+                                </p>
+                            </div>
+                        </div>
+                        <div className="px-5 py-5 grid grid-cols-5 sm:grid-cols-5 gap-3">
+                            {PLAN_CONFIGURATION_OPTIONS.map((opt) => {
+                                const isActive = watchedPlanConfig === opt.value;
+                                return (
+                                    <button
+                                        key={opt.value}
+                                        type="button"
+                                        onClick={() => setValue("plan_configuration", opt.value)}
+                                        className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 transition-all cursor-pointer select-none ${
+                                            isActive
+                                                ? "border-indigo-500 bg-indigo-50 shadow-sm"
+                                                : "border-slate-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/30"
+                                        }`}
+                                    >
+                                        <div className="w-10 h-10">
+                                            <FootprintSVG shape={opt.value} active={isActive} />
+                                        </div>
+                                        <span className={`text-[9px] font-semibold text-center leading-tight ${isActive ? "text-indigo-800" : "text-slate-600"}`}>
+                                            {opt.label}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        {errors.plan_configuration && (
+                            <span className="text-[10px] text-rose-600 font-mono block px-5 pb-3">
+                                {errors.plan_configuration.message}
+                            </span>
+                        )}
+                    </div>
+
+                    {/* NEW Section 8: Other Floor Type */}
+                    <div className="rounded-xl bg-card border border-border shadow-card overflow-hidden">
+                        <div className="flex items-center gap-3 px-5 py-4 border-b border-teal-100 bg-teal-50/60">
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-teal-100">
+                                <Layers className="h-4 w-4 text-teal-700" />
+                            </span>
+                            <div>
+                                <p className="text-sm font-semibold text-foreground">
+                                    Other Floor Type
+                                </p>
+                                <p className="text-xs text-teal-700/70">
+                                    Floor construction above the ground floor (select &quot;Not applicable&quot; for single-storey)
+                                </p>
+                            </div>
+                        </div>
+                        <div className="px-5 py-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {OTHER_FLOOR_TYPE_OPTIONS.map((opt) => {
+                                const isActive = watchedOtherFloorType === opt.value;
+                                return (
+                                    <button
+                                        key={opt.value}
+                                        type="button"
+                                        onClick={() => setValue("other_floor_type", opt.value)}
+                                        className={`flex flex-col items-start gap-1 p-3 rounded-xl border-2 transition-all cursor-pointer select-none text-left ${
+                                            isActive
+                                                ? "border-teal-500 bg-teal-50 shadow-sm"
+                                                : "border-slate-200 bg-white hover:border-teal-300 hover:bg-teal-50/30"
+                                        }`}
+                                    >
+                                        <span className={`text-xs font-semibold ${isActive ? "text-teal-800" : "text-slate-700"}`}>
+                                            {opt.label}
+                                        </span>
+                                        <span className="text-[10px] text-slate-500 leading-snug">
+                                            {opt.description}
+                                        </span>
+                                        {opt.value === "TImber/Bamboo-Mud" && (
+                                            <span className="text-[9px] text-amber-600 italic mt-0.5">
+                                                Survey spelling preserved
+                                            </span>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        {errors.other_floor_type && (
+                            <span className="text-[10px] text-rose-600 font-mono block px-5 pb-3">
+                                {errors.other_floor_type.message}
+                            </span>
+                        )}
+                    </div>
+
+                    {/* Section 9: Location Context */}
                     <FormSectionCard
                         title="Building Location"
                         desc="Pin the building coordinates manually for

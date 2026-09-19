@@ -50,6 +50,7 @@ function hazardBadgeVariant(
 function AssessmentHistoryCard({ assessment }: AssessmentHistoryCardProps) {
     const riskScore = calculateRiskScore(
         assessment.hazard_score,
+        null,
         assessment.resilience_score
     );
     const riskLevel = getRiskLevel(riskScore);

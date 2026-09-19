@@ -15,6 +15,7 @@ import BuildingProfileCard from "./BuildingProfileCard";
 import RiskGauge from "./RiskGauge";
 import RiskInterpretation from "./RiskInterpretation";
 import ContributingFactors from "./ContributingFactors";
+import DamageDistributionCard from "./DamageDistributionCard";
 import AiInsights from "./AiInsights";
 import SupportingEvidence from "./SupportingEvidence";
 import Footer from "@/components/footer";
@@ -88,6 +89,7 @@ function DashboardPage() {
     const computedRiskScore = assessment
         ? calculateRiskScore(
               assessment.hazard_score,
+              null,
               assessment.resilience_score,
           )
         : 0;
@@ -172,6 +174,8 @@ function DashboardPage() {
 
                 <div className="space-y-12 pb-12">
                     <RiskInterpretation llm={assessment.llm} />
+
+                    <DamageDistributionCard building={assessment.building} />
 
                     <ContributingFactors
                         environmentalContext={
