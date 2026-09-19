@@ -27,18 +27,19 @@ is trained on the team's real data, on a target that is ordered, using only inpu
 
 ### Cross-district — the honest number for a country the model has never seen
 
-3 folds, 0 % of test rows in a district the model trained on, 40,000-row stratified subsample:
+3 folds, 0 % of test rows in a district the model trained on, 120,000-row stratified subsample,
+500 rounds / depth 6 / lr 0.08:
 
 | Variant | Accuracy | MAE | QWK | ±1 |
 |---|---:|---:|---:|---:|
-| **this model** (monotone in distance) | **33.44 %** | **0.933** | **0.482** | **79.4 %** |
-| same features, unconstrained | 29.53 % | 1.017 | 0.399 | 76.2 % |
-| the same comparison at 120,000 rows | see `results_grouped_v3.json` in the research workspace |
+| **this model** (monotone in distance) | **33.31 %** | **0.934** | **0.480** | **79.4 %** |
+| same features, unconstrained | 29.02 % | 1.024 | 0.392 | 76.1 % |
 
-The unconstrained variant scores **8.2 points higher on a random split (53.99 %)** and lower here on
-every metric. That gap is the measured size of the geography it memorises through the distance
-feature, and it is why the constrained model is the one deployed. Quote the grouped figure for
-Myanmar claims; the random-split figure is optimistic by roughly 12 points.
+Replicated at 40,000 rows with the same ordering (33.44 % vs 29.53 %). The unconstrained variant
+scores **8.2 points higher on a random split (53.99 %)** and lower here on every metric. That gap is
+the measured size of the geography it memorises through the distance feature, and it is why the
+constrained model is the one deployed. Quote the grouped figure for Myanmar claims; the random-split
+figure is optimistic by roughly 12 points.
 
 ### What "MAE 0.712" means
 

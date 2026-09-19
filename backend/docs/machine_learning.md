@@ -113,22 +113,24 @@ mud-mortar stone, 3-storey, 40-year building fixed, it scores 22.4 at 60 km but 
 
 | Variant | Constraint | Same-district accuracy | Same-district MAE | Grouped accuracy | Grouped MAE |
 |---|---|---:|---:|---:|---:|
-| `models_v3` | none | **53.99 %** | **0.589** | 29.53 % | 1.017 |
-| **`models_v3m` — deployed** | `epi_distance_km = −1` | 45.79 % | 0.712 | **33.44 %** | **0.933** |
+| `models_v3` | none | **53.99 %** | **0.589** | 29.02 % | 1.024 |
+| **`models_v3m` — deployed** | `epi_distance_km = −1` | 45.79 % | 0.712 | **33.31 %** | **0.934** |
 
 The constraint costs **8.2 accuracy points on a random split**, which is why it was not obvious to
 adopt. It pays for itself the moment whole districts are held out: on 3 district-grouped folds the
-constrained model wins accuracy, MAE, QWK (0.482 vs 0.399) and ±1 (79.4 % vs 76.2 %) — every metric,
-every fold. The unconstrained model's same-district advantage is memory of *which district* a building
-is in, channelled through the distance feature, and it does not exist in a country the model has never
-seen. Since the target users are in Myanmar, the deployed model is the constrained one.
+constrained model wins accuracy, MAE, QWK (0.480 vs 0.392) and ±1 (79.4 % vs 76.1 %) — every metric,
+every fold, at both 40k and 120k rows. The unconstrained model's same-district advantage is memory of
+*which district* a building is in, channelled through the distance feature, and it does not exist in a
+country the model has never seen. Since the target users are in Myanmar, the deployed model is the
+constrained one.
 
 The constrained model also passes a distance sweep for both archetypes (`E[grade]` 4.90 → 2.50 for the
 mud-stone profile from 2 km to 200 km; 3.56 → 1.23 for engineered RC), which is asserted in
 `train_v3_monotone.py` and recorded in the bundle metadata.
 
-Grouped figures above are from the 40k-row stratified subsample that fits the comparison in one
-sitting; the run configuration is recorded alongside them in `results_grouped_v3.json`.
+Grouped protocol: 120,000-row district-stratified subsample, 3 folds, 0 % of test rows in a seen
+district, 500 rounds / depth 6 / lr 0.08. The 40,000-row replication gives the same ordering
+(33.44 % vs 29.53 %); both are recorded in `results_grouped_v3.json`.
 
 ---
 
@@ -167,9 +169,10 @@ Same-district split (152,419 held-out buildings, seed 42), model v3m (deployed):
 | Majority-class baseline | 36.1 % |
 
 **Cross-district (district-grouped) results** are the honest "works in a country we have no data for"
-number: **33.44 % accuracy / MAE 0.933 / QWK 0.482 / ±1 79.4 %**, against 29.53 % / 1.017 / 0.399 /
-76.2 % for the unconstrained variant on identical folds. Same-district accuracy overstates transfer by
-roughly 12 points, so quote the grouped figure whenever the claim is about Myanmar.
+number: **33.31 % accuracy / MAE 0.934 / QWK 0.480 / ±1 79.4 %**, against 29.02 % / 1.024 / 0.392 /
+76.1 % for the unconstrained variant on identical folds (120,000 rows, 3 folds, 0 % seen districts).
+Same-district accuracy overstates transfer by roughly 12 points, so quote the grouped figure whenever
+the claim is about Myanmar.
 
 Comparisons on the same split:
 

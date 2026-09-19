@@ -211,20 +211,37 @@
   },
   "site_contract": "epi_distance_km = great-circle distance from the site to the epicentre of the governing event; P(grade>k) is constrained non-increasing in it.",
   "model_version": "damage-v3m-monotone",
-  "monotone_rationale": "P(grade>k) constrained non-increasing in epi_distance_km. Costs accuracy on a random split (53.99% -> 45.79%) but wins on district-grouped folds, which is the metric that matters for a country the model has never seen: 33.44% vs 29.53% accuracy, MAE 0.933 vs 1.017 (3 folds, 40k rows).",
+  "monotone_rationale": "P(grade>k) constrained non-increasing in epi_distance_km. Costs 8.2 accuracy points on a random split (53.99% -> 45.79%) but wins on district-grouped folds, the metric that matters for a country the model has never seen: 33.31% vs 29.02% accuracy, MAE 0.9335 vs 1.0244 (3 folds, 120k rows).",
   "grouped_cv": {
-    "dataset": "40k-row district-stratified subsample, 3 folds, 0% seen districts",
-    "monotone": {
-      "accuracy": 0.3344,
-      "mae": 0.9328,
-      "qwk": 0.4818,
-      "adjacent_accuracy": 0.794
+    "protocol": "district-grouped folds, 0% of test rows in a seen district, 500 rounds / depth 6 / lr 0.08",
+    "n_rows_120k_3folds": {
+      "monotone": {
+        "accuracy": 0.3331,
+        "mae": 0.9335,
+        "qwk": 0.4802,
+        "adjacent_accuracy": 0.7935
+      },
+      "unconstrained": {
+        "accuracy": 0.2902,
+        "mae": 1.0244,
+        "qwk": 0.3923,
+        "adjacent_accuracy": 0.7608
+      }
     },
-    "unconstrained": {
-      "accuracy": 0.2953,
-      "mae": 1.0166,
-      "qwk": 0.399,
-      "adjacent_accuracy": 0.762
-    }
+    "n_rows_40k_3folds": {
+      "monotone": {
+        "accuracy": 0.3344,
+        "mae": 0.9328,
+        "qwk": 0.4818,
+        "adjacent_accuracy": 0.794
+      },
+      "unconstrained": {
+        "accuracy": 0.2953,
+        "mae": 1.0166,
+        "qwk": 0.399,
+        "adjacent_accuracy": 0.762
+      }
+    },
+    "conclusion": "the constraint wins accuracy, MAE, QWK and +/-1 at both sample sizes; its 8.2-point same-district deficit (53.99% -> 45.79%) is memorised district geography"
   }
 }
