@@ -36,21 +36,62 @@ async def get_place_name(
     longitude: float,
 ) -> str | None:
     """Reverse-geocode a coordinate. Returns None on any failure so the
-    assessment can still be saved (place_name is stored nullable)."""
+    assessment can still be saved (place_name is stored nullable).
+
+    The wait is hard-bounded: geopy's own ``timeout`` only covers the socket read, so on a host
+    that blackholes DNS/connect requests (nominatim.openstreetmap.org is unreachable from this
+    network) a bare call stalls the whole save step for a minute or more. The thread is abandoned
+    rather than cancelled — it cannot be cancelled — but the request no longer waits on it.
+    """
     try:
-        location = await asyncio.to_thread(
-            geolocator.reverse,
-            (latitude, longitude),
-            timeout=5,
+        location = await asyncio.wait_for(
+            asyncio.to_thread(
+                geolocator.reverse,
+                (latitude, longitude),
+                timeout=3,
+            ),
+            timeout=5.0,
         )
         return getattr(location, "address", None) if location else None
     except Exception:
         logger.warning(
-            "Reverse geocoding failed for (%s, %s); storing without a place name.",
+            "Reverse geocoding failed or timed out for (%s, %s); storing without a place name.",
             latitude,
             longitude,
         )
         return None
+
+
+def extract_governing_distance(hazard_data) -> float | None:
+    """Epicentral distance (km) to the event that governs the site's ground motion.
+
+    The damage model's only site term was trained as the distance to the event that shook the
+    building (the 2015 Gorkha event for every training row), so at inference it takes the same
+    quantity: the distance to the dominant event the hazard engine used for `estimated_mmi` and
+    `estimated_pga_g`. When the catalogue holds no significant event inside the search radius the
+    closest catalogued event is used; None is returned only when there is nothing to measure to.
+    """
+    try:
+        env = hazard_data.environmental_context
+        if not isinstance(env, dict):
+            env = env.model_dump(mode="json")
+        event = (env.get("ground_motion") or {}).get("governing_event")
+        if event and event.get("distance_km") is not None:
+            return float(event["distance_km"])
+
+        stats = hazard_data.statistics
+        if not isinstance(stats, dict):
+            stats = stats.model_dump(mode="json")
+        closest = stats.get("closest_earthquake_km")
+        if closest is not None:
+            return float(closest)
+    except Exception:
+        logger.warning(
+            "Could not derive the governing-event distance from the hazard report; "
+            "the damage model will run without a site term.",
+            exc_info=True,
+        )
+    return None
 
 @router.post("/save", status_code=status.HTTP_201_CREATED, summary="Persist a complete earthquake risk assessment")
 async def save_assessment(
@@ -89,7 +130,7 @@ async def save_assessment(
             resilience_score=building["resilience_score"],
             hazard_score=hazard_metrics["overall_score"],
             hazard_level=hazard_metrics["hazard_level"],
-            model_version=metadata.get("model_version"),
+            model_version=building.get("model_version") or metadata.get("model_version"),
             execution_time_seconds=execution_time,
             profile=profile,
             building=building,
@@ -174,14 +215,11 @@ async def process_assessment(
             })
 
             # ---------------------------------------------------------
-            # START PARALLEL ANALYSIS
+            # HAZARD FIRST, THEN BUILDING
+            # The damage model conditions on the site's governing event distance, so the hazard
+            # engine has to resolve before the building can be scored. The two used to run in
+            # parallel; the dependency is one-directional and cheap (the call is network-bound).
             # ---------------------------------------------------------
-
-            yield sse_event({
-                "type": "stage_started",
-                "stage": "resilience",
-                "status": "Assessing building resilience..."
-            })
 
             yield sse_event({
                 "type": "stage_started",
@@ -190,36 +228,39 @@ async def process_assessment(
             })
 
             t0 = time.time()
-            building_task = asyncio.to_thread(
+            hazard_data = await calculate_hazard_route(
+                inputs=hazard_input_payload
+            )
+
+            yield sse_event({
+                "type": "stage_completed",
+                "stage": "hazard"
+            })
+
+            yield sse_event({
+                "type": "stage_started",
+                "stage": "resilience",
+                "status": "Assessing building resilience..."
+            })
+
+            epi_distance_km = extract_governing_distance(hazard_data)
+
+            building_data = await asyncio.to_thread(
                 calculate_pure_resilience,
                 payload=building_input_payload,
-                request=request
+                request=request,
+                epi_distance_km=epi_distance_km
             )
 
-            hazard_task = asyncio.create_task(
-                calculate_hazard_route(
-                    inputs=hazard_input_payload
-                )
-            )
-
-            building_data, hazard_data = await asyncio.gather(
-                building_task,
-                hazard_task
-            )
             parallel_elapsed = time.time() - t0
 
             # ---------------------------------------------------------
-            # BOTH PARALLEL TASKS COMPLETE
+            # BOTH TASKS COMPLETE
             # ---------------------------------------------------------
 
             yield sse_event({
                 "type": "stage_completed",
                 "stage": "resilience"
-            })
-
-            yield sse_event({
-                "type": "stage_completed",
-                "stage": "hazard"
             })
 
             # ---------------------------------------------------------

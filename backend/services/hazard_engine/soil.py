@@ -23,6 +23,10 @@ delta = 0.01 # Increasing this lowers the accuracy of the fallback average soil 
 value = 'mean'
 depths = ["0-5cm", "5-15cm", "15-30cm"]
 
+# Hard budget for the whole SoilGrids fetch. Beyond it the coordinate-based fallback profile is
+# used, so an unreachable ISRIC host degrades the soil detail instead of stalling the assessment.
+SOIL_FETCH_BUDGET_SECONDS = 12.0
+
 _SOIL_CACHE_TTL_SECONDS = 60 * 60 * 24  # 24 hours
 _SOIL_CACHE: Dict[Tuple[float, float], Tuple[float, Dict[str, Any]]] = {}
 
@@ -53,10 +57,23 @@ async def fetch_soilgrids_data(lat: float, lon: float) -> Dict[str, Any]:
         return cached
 
     try:
-        # Offload the blocking thread pool and WCS network requests 
-        # so they don't lock up your main event loop thread
-        values = await asyncio.to_thread(_fetch_all_layers, lat, lon)
+        # Bounded wait. The ISRIC WCS endpoint read-times-out at 30 s per layer and the layers are
+        # fetched concurrently, so an unreachable host used to stall a full assessment for minutes
+        # (observed: several properties timing out back to back). Past the budget we prefer the
+        # coordinate-based fallback profile to making the user wait.
+        values = await asyncio.wait_for(
+            # Offload the blocking thread pool and WCS network requests
+            # so they don't lock up the main event loop thread
+            asyncio.to_thread(_fetch_all_layers, lat, lon),
+            timeout=SOIL_FETCH_BUDGET_SECONDS,
+        )
         result = _convert_to_features(values)
+    except asyncio.TimeoutError:
+        logger.warning(
+            "SoilGrids fetch exceeded %.0fs for (%s, %s) — using the coordinate-based fallback "
+            "soil profile.", SOIL_FETCH_BUDGET_SECONDS, lat, lon,
+        )
+        result = get_fallback_soil_properties(lat, lon)
     except Exception as e:
         logger.warning(f"WCS soil fetch failed: {e}")
         result = get_fallback_soil_properties(lat, lon)

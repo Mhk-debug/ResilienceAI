@@ -1,315 +1,221 @@
 # Machine Learning Documentation
 
-> **XGBoost damage grade prediction model for building seismic resilience**
+> **Ordinal building-damage model (damage grades 1–5) for seismic resilience screening.**
+>
+> This documents the model deployed in September 2026. It replaced a 3-class classifier that the API
+> could only feed 13 of 43 inputs to; that artifact measured 19.3 % accuracy on the served path
+> against a 56.9 % majority-class baseline. The retired files live in `backend/models/retired/` for
+> reference and are not loaded by the application.
 
 ---
 
-## Model Purpose
+## 1. What the model is
 
-Predict building damage grade (Low/Medium/High) from structural characteristics using the **Richter Predictor dataset** (Nepal 2015 Gorkha earthquake, ~260K buildings). The model outputs class probabilities which are converted to a continuous **Structural Seismic Resilience Score (0-100)**.
+| | |
+|---|---|
+| Type | Ordinal cumulative-link decomposition: four binary XGBoost boosters estimating `P(grade > k)`, k = 1…4 |
+| Target | `damage_grade` ∈ {1, 2, 3, 4, 5} (1 = no damage, 5 = destruction) |
+| Inputs | 54 features after one-hot encoding (see §3) |
+| Artifacts | `backend/models/seismic_damage_v3/` — `ordinal_grade_gt1..4.pkl` + `model_metadata.json` + `MODEL_CARD.md` |
+| `model_version` | `damage-v3m-monotone` |
+| Loader | `backend/services/damage_model.py` (`DamageModel`, `load_damage_model`) |
+| Called from | `services/resilience_service.py::predict_resilience` ← `routes/resilience.py` ← `routes/assessment.py` |
 
----
+Output per building: the full five-grade probability distribution, `E[grade]`, the most likely grade,
+`P(grade ≥ 4)`, a 0–100 resilience score, and a list of caveats. See `resilience_scoring.md` for how
+those are derived and combined with the hazard score.
 
-## Model Artifacts
+### Why ordinal, not flat multiclass
 
-| File | Path | Description |
-|------|------|-------------|
-| Model | `backend/models/seismic_resilience_xgb.pkl` | Joblib-serialized XGBoost classifier |
-| Features | `backend/models/model_features.json` | Ordered list of 121 expected feature names |
-
-**Loading (in `main.py` lifespan):**
-```python
-model = joblib.load(MODEL_PATH)
-with open(SCHEMA_PATH) as f:
-    expected_features = json.load(f)
-```
-
----
-
-## Training Data: Richter Predictor Dataset
-
-**Source:** DrivenData "Richter's Predictor: Modeling Earthquake Damage" competition
-
-| Aspect | Detail |
-|--------|--------|
-| Event | 2015 Gorkha Earthquake (M7.8), Nepal |
-| Buildings | ~260,000 surveyed |
-| Target | `damage_grade` (1=Low, 2=Medium, 3=High) |
-| Features | 30 raw → ~121 engineered (after OHE) |
-| Key structural features | age, floors, height, area, material flags, foundation/roof/floor type |
-
-**Material Flags (mutually exclusive in theory, multi-hot in practice):**
-- `has_superstructure_mud_mortar_stone`
-- `has_superstructure_rc_engineered`
-- `has_superstructure_cement_mortar_brick`
-- `has_superstructure_rc_non_engineered`
-- `has_superstructure_adobe_mud`
-- `has_superstructure_timber`
-
-**Categorical Codes (Richter dataset):**
-| Feature | Codes |
-|---------|-------|
-| `foundation_type` | r, w, i, u, h |
-| `roof_type` | n, q, x |
-| `ground_floor_type` | f, v, x, m, z |
-
-**Mapping:** See `backend/richtor_mappings.py` for code → description + vulnerability rating.
+Damage grades are ordered: predicting Grade 1 as Grade 5 is a worse error than predicting Grade 1 as
+Grade 2. A flat softmax treats all misclassifications alike. The cumulative-link decomposition gives
+the model ordered decision boundaries and, on this data, produced better MAE and QWK than the flat
+softmax for the price of ~1 point of accuracy. The measured comparison is in the research notes
+(`~/HermesWork/resilienceai-ml-research/`), summarised in §5.
 
 ---
 
-## Input Features (User-Facing)
+## 2. Training data
 
-The API accepts these **raw building parameters** (validated by `BuildingInput` in `project_schema.py`):
+| | |
+|---|---|
+| Source | Nepal 2015 Building Structure Survey (Gorkha earthquake), 11 most-affected districts |
+| Rows | 762,094 labelled buildings (`training/csv_building_structure.csv`, stored via git-LFS) |
+| Label distribution | Grade 1 10.34 % · Grade 2 11.45 % · Grade 3 17.90 % · Grade 4 24.12 % · Grade 5 36.18 % |
+| Majority-class baseline | 36.1 % (always predicting Grade 5) |
+| Split | 533,465 train / 76,210 validation / 152,419 test, stratified, seed 42 |
 
-| Field | Type | Range | Description |
-|-------|------|-------|-------------|
-| `count_floors_pre_eq` | int | 1–10 | Stories before earthquake |
-| `age` | int | 0–999 | Building age (years) |
-| `area_sq_ft` | int | 70–5000 | Floor area |
-| `height_ft` | int | 6–305 | Building height |
-| `foundation_type` | str | 1 char | Code: r/w/i/u/h |
-| `roof_type` | str | 1 char | Code: n/q/x |
-| `ground_floor_type` | str | 1 char | Code: f/v/x/m/z |
-| `has_superstructure_*` | int | 0/1 | 6 material flags |
+**The target is not the DrivenData competition label.** Two datasets circulate with this project's
+name: the DrivenData "Richter's Predictor" table (260,601 rows, 3 damage classes, anonymised
+geography) and the survey file above (762,094 rows, 5 grades, named districts). The retired artifact
+spoke the DrivenData schema; this model speaks the survey schema.
 
----
-
-## Feature Engineering Pipeline
-
-**Location:** `services/pipeline.py`
-
-### 1. Physical Dimension Scaling (`scale_user_inputs`)
-
-Maps real-world measurements to **Richter dataset quantile codes** via piecewise-linear interpolation:
-
-```python
-# Area mapping
-area_sqft_nodes     = [70, 250, 500, 1000, 1800, 3500, 5000]
-richter_area_nodes  = [1, 3, 5, 8, 12, 22, 35]
-
-# Height mapping  
-height_ft_nodes     = [6, 12, 18, 30, 50, 90, 305]
-richter_height_nodes= [2, 3, 5, 8, 14, 25, 32]
-
-area_percentage = np.interp(clamped_area, area_sqft_nodes, richter_area_nodes)
-height_percentage = np.interp(clamped_height, height_ft_nodes, richter_height_nodes)
-```
-
-**Why?** The training data uses these quantile codes, not raw measurements. Direct interpolation preserves the distributional assumptions the model learned.
+**Never train on these four columns.** `count_floors_post_eq`, `height_ft_post_eq`,
+`condition_post_eq` and `technical_solution_proposed` were recorded *after* the earthquake and
+determine the label: `height_ft_post_eq == 0` covers 261,353 rows (34.29 %) and **100 % of them are
+Grade 5**; `condition_post_eq = "Damaged-Rubble…"` has mean grade exactly 5.00; "Not damaged" exactly
+1.00. A model trained on "everything except `damage_grade`" is reading the surveyor's post-event
+assessment off the form and scores ~89 % — that figure appears in public notebooks and is leakage.
+The form collects pre-earthquake fields only, which is why honest accuracy sits in the 40–56 % range.
 
 ---
 
-### 2. Structural Feature Extraction (`StructuralFeatureExtractor`)
+## 3. Input features (54, all supplyable by the form)
 
-Custom `sklearn` transformer (`BaseEstimator`, `TransformerMixin`):
+| Group | Count | Source in the request |
+|---|---|---|
+| Numeric | 4 | `count_floors_pre_eq`, `age`, `area_sq_ft`, `height_ft` |
+| Derived | 3 | `storey_height_ft`, `slenderness`, `age_floors` (computed in the loader) |
+| Material flags | 11 | the eleven `has_superstructure_*` booleans |
+| Categorical one-hots | 35 | `land_surface_condition` (3), `foundation_type` (5), `roof_type` (3), `ground_floor_type` (5), `other_floor_type` (4), `position` (4), `plan_configuration` (10) |
+| Site term | 2 | `epi_distance_km`, `has_distance` |
 
-```python
-class StructuralFeatureExtractor:
-    def transform(self, X):
-        # 1. Validate required fields
-        required = ['age', 'count_floors_pre_eq', 'height_percentage', 'area_percentage']
-        
-        # 2. Compute derived mechanical indicators
-        X['height_to_floor_ratio'] = X['height_percentage'] / (X['count_floors_pre_eq'] + 1e-5)
-        X['area_to_height_ratio'] = X['area_percentage'] / (X['height_percentage'] + 1e-5)
-        
-        # 3. Material vulnerability flags
-        X['is_highly_vulnerable_material'] = (
-            X.get('has_superstructure_mud_mortar_stone', 0) == 1) | \
-            (X.get('has_superstructure_mud_mortar_brick', 0) == 1)
-        
-        X['is_engineered_material'] = (
-            X.get('has_superstructure_rc_engineered', 0) == 1) | \
-            (X.get('has_superstructure_cement_mortar_brick', 0) == 1)
-        
-        # 4. Structural degradation proxy
-        X['structural_age_stress'] = X['age'] * X['count_floors_pre_eq']
-        
-        # 5. Drop non-structural columns
-        drop_cols = ['building_id', 'geo_level_*_id', 'legal_ownership_status',
-                     'land_surface_condition', 'position'] + secondary_use_cols
-        X = X.drop(columns=drop_cols)
-        
-        return X
-```
+Two properties of this list matter as much as its contents:
 
-**Key Design Decision:** Drops geolocation and socio-economic proxies to prevent "geographical cheating" — the model must learn structural vulnerability, not location correlation.
+1. **Every input is collected by the form.** The retired model was fed 13 of its 43 inputs as
+   constant zeros, which is what destroyed its accuracy. Feature order comes from
+   `model_metadata.json["features"]`; the loader reindexes to that order with `fill_value=0` and never
+   re-sorts.
+2. **Categorical values are the survey's own vocabulary** (`Mud mortar-Stone/Brick`,
+   `Bamboo/Timber-Light roof`, and the survey's own spellings `TImber/Bamboo-Mud` and
+   `Timber-Planck`). The three legacy fields still arrive as single-letter codes and are mapped in
+   `services/damage_model.py::APP_CODE_TO_SURVEY`; that table was verified against the training data by
+   joint distribution (86,400 permutations), marginal prevalence and measured damage ordering. Ground
+   floor `v` is RC and `x` is brick/stone — the pair is easy to swap and `scripts/verify_code_mappings.py`
+   exists to stop it regressing.
 
----
+### The site term, and why it is distance rather than intensity
 
-### 3. Categorical Encoding & Schema Alignment
+The model conditions on one site-specific input: the epicentral distance to the **governing event** the
+hazard engine identified (the largest-magnitude event within the search radius that drives
+`estimated_mmi` / `estimated_pga_g`). The hazard report exposes that event as
+`environmental_context.ground_motion.governing_event`, and `routes/assessment.py` passes its
+`distance_km` to the model. The pipeline therefore runs **hazard → building → LLM**, not in parallel.
 
-```python
-# One-hot encode
-categorical = ["foundation_type", "roof_type", "ground_floor_type"]
-df_encoded = pd.get_dummies(df_transformed, columns=available_categorical, dtype=int)
+An absolute intensity term (MMI) was the first choice and was rejected on measurement: the app's own
+attenuation relation, `services/hazard_engine/shakemap.py::estimate_pga_g`, is a *perfect monotone
+function of epicentral distance* (Spearman −1.000 against distance, +0.146 against damage grade),
+whereas the ward-level intensity field the research used correlates +0.502 with grade. Feeding the
+app's MMI therefore reproduces only the distance signal while pretending to add information. Two further
+defects found in the same check were fixed regardless:
 
-# Align to training schema (121 features)
-for col in expected_features_list:
-    if col not in df_encoded.columns:
-        df_encoded[col] = 0
-df_final = df_encoded.reindex(columns=expected_features_list, fill_value=0)
-```
+* `integrate_shakemap_data` overwrote the GMPE-consistent MMI with `event.max_mmi × ratio`, collapsing
+  it towards 1.0 for any distant event. A Gorkha ward with scenario MMI 8.00 reported **MMI 1.0
+  alongside PGA 0.125 g** (which implies ≈ MMI 5.5). The site MMI is now `pga_to_mmi(est_pga)`, with
+  the event's own peak MMI used only as an upper bound.
+* The governing event was not reported at all, so nothing downstream could condition on it.
 
-**Result:** Fixed 121-column feature matrix matching training exactly.
+### Monotonicity, and why the deployed model is constrained
 
----
+Damage must not increase with distance from the fault. The unconstrained model is **not** monotone,
+because distance is confounded with district construction practice in the training data: holding a
+mud-mortar stone, 3-storey, 40-year building fixed, it scores 22.4 at 60 km but 16.8 at 150 km.
 
-## Prediction Process
+| Variant | Constraint | Same-district accuracy | Same-district MAE | Grouped accuracy | Grouped MAE |
+|---|---|---:|---:|---:|---:|
+| `models_v3` | none | **53.99 %** | **0.589** | 29.53 % | 1.017 |
+| **`models_v3m` — deployed** | `epi_distance_km = −1` | 45.79 % | 0.712 | **33.44 %** | **0.933** |
 
-**Location:** `services/resilience_engine.py` → `calculate_resilience_score()`
+The constraint costs **8.2 accuracy points on a random split**, which is why it was not obvious to
+adopt. It pays for itself the moment whole districts are held out: on 3 district-grouped folds the
+constrained model wins accuracy, MAE, QWK (0.482 vs 0.399) and ±1 (79.4 % vs 76.2 %) — every metric,
+every fold. The unconstrained model's same-district advantage is memory of *which district* a building
+is in, channelled through the distance feature, and it does not exist in a country the model has never
+seen. Since the target users are in Myanmar, the deployed model is the constrained one.
 
-```python
-def calculate_resilience_score(trained_model, feature_matrix):
-    # XGBoost returns probabilities for 3 classes
-    # Col 0: P(Low Damage), Col 1: P(Medium Damage), Col 2: P(High Damage)
-    probabilities = trained_model.predict_proba(feature_matrix)
-    
-    low_damage_prob = probabilities[:, 0]
-    med_damage_prob = probabilities[:, 1]
-    
-    # Expected value weighting: Low=100, Medium=45, High=0
-    resilience_scores = (low_damage_prob * 100) + (med_damage_prob * 45)
-    
-    return float(np.round(resilience_scores[0], 2))
-```
+The constrained model also passes a distance sweep for both archetypes (`E[grade]` 4.90 → 2.50 for the
+mud-stone profile from 2 km to 200 km; 3.56 → 1.23 for engineered RC), which is asserted in
+`train_v3_monotone.py` and recorded in the bundle metadata.
 
-### Score Interpretation
-
-| Resilience Score | Damage Grade | Interpretation |
-|------------------|--------------|----------------|
-| 85–100 | Low (Grade 1) | Highly resilient, minor damage expected |
-| 50–84 | Medium (Grade 2) | Moderate vulnerability, significant damage possible |
-| 0–49 | High (Grade 3) | Fragile, likely severe damage/collapse |
-
-**Weighting Rationale:**
-- Low damage → full credit (100)
-- Medium damage → partial credit (45) — life safety but major repair
-- High damage → zero credit — collapse/loss
+Grouped figures above are from the 40k-row stratified subsample that fits the comparison in one
+sitting; the run configuration is recorded alongside them in `results_grouped_v3.json`.
 
 ---
 
-## Output: `ResilienceAssessmentResponse`
-
-```python
-{
-    "status": "success",
-    "resilience_score": 72.5,           # 0-100 continuous
-    "building_llm_context": {
-        "structural": {
-            "floors": 2,
-            "age_years": 25,
-            "floor_area_sq_feets": 1200,
-            "height_feets": 24
-        },
-        "material": {
-            "roof_type": "Bamboo / Timber - light roof",
-            "foundation_type": "Reinforced Concrete (RC) / Cement",
-            "ground_floor_type": "Reinforced Concrete (RC) floor"
-        },
-        "substructure": {
-            "mud_mortar_stone": false,
-            "cement_brick": false,
-            "rc_engineered": true,
-            "rc_non_engineered": false,
-            "adobe_mud": false,
-            "timber": false
-        }
-    }
-}
-```
-
----
-
-## Model Performance
-
-| Metric | Value | Notes |
-|--------|-------|-------|
-| **MAE (damage grade)** | ~0.60 | On Richter test set |
-| **R² (resilience score)** | ~0.57 | Continuous score vs true grade |
-| **Ordinal accuracy** | ~68% | Exact grade match |
-| **Adjacent accuracy** | ~92% | Off-by-one or less |
-
-**Training Details (from memory/experiments):**
-- XGBoost with loose regularization (not ordinal-specific)
-- Trees naturally learn ordinal boundaries
-- Mord `LogisticAT` tried but worse (MAE ~1.08)
-- Feature importance dominated by: material flags, age, floors, height/area ratios
-
----
-
-## Limitations
-
-| Limitation | Impact | Mitigation |
-|------------|--------|------------|
-| **Nepal-specific training data** | May not generalize to Myanmar/other typologies | Knowledge base covers Myanmar adaptations; hazard engine is location-agnostic |
-| **No geospatial features** | Cannot learn regional code enforcement differences | Intentional — structural vulnerability should be location-independent |
-| **Single event (Gorkha 2015)** | One earthquake, one soil condition | Hazard engine provides site-specific hazard |
-| **Material flags multi-hot** | Real buildings mix materials; dataset assumes dominant | User selects primary; KB covers mixed constructions |
-| **Ordinal target as classification** | Loses ordinal information in loss function | Trees handle this well empirically; MAE competitive |
-| **No uncertainty quantification** | Point prediction only | Confidence from hazard engine + LLM confidence field |
-
----
-
-## Inference Code Path
+## 4. Inference contract
 
 ```
-routes/resilience.py:calculate_pure_resilience()
-    └─ services/resilience_service.py:predict_resilience()
-        ├─ payload.model_dump()
-        ├─ services/pipeline.py:process_and_align_inference_data()
-        │   ├─ scale_user_inputs()
-        │   ├─ StructuralFeatureExtractor.fit_transform()
-        │   ├─ pd.get_dummies()
-        │   └─ reindex(expected_features)
-        ├─ services/resilience_engine.py:calculate_resilience_score()
-        │   └─ model.predict_proba() → weighted score
-        └─ BuildingLLMContext construction (richtor_mappings.decode_building_feature)
+payload (22 form fields)  +  epi_distance_km (from the hazard engine)
+        │
+        ├─ build_features: numeric/derived/flags verbatim, categoricals one-hot by vocabulary,
+        │                  distance + has_distance, reindex to metadata["features"]
+        ├─ four boosters → P(grade > k)
+        ├─ monotonicity guard: P(grade > k) ≤ P(grade > k−1), flagged when it fires
+        └─ probabilities, E[grade], grade_class, resilience_score, p_severe_grade45, flags
 ```
+
+* `has_distance = 1` whenever a governing event exists. When none does, the loader warns, neutralises
+  the site term at the training mean, and sets the flag `no site distance available`.
+* A distance outside the training range (2.4–215.5 km) adds an extrapolation flag rather than silently
+  extrapolating.
+* `flags` are surfaced in the dashboard, not hidden.
 
 ---
 
-## Retraining / Updating
+## 5. Measured performance
 
-**To retrain:**
-1. Obtain new labeled dataset (same schema)
-2. Run feature engineering pipeline (`pipeline.py`) on training data
-3. Train XGBoost with same hyperparameters
-4. Save model: `joblib.dump(model, 'seismic_resilience_xgb.pkl')`
-5. Save feature list: `json.dump(list(X.columns), open('model_features.json', 'w'))`
-6. Replace files in `backend/models/`
-7. Restart backend (lifespan reloads automatically)
+Same-district split (152,419 held-out buildings, seed 42), model v3m (deployed):
 
-**Required hyperparameters** (match training):
-```python
-# From training experiments
-params = {
-    'objective': 'multi:softprob',
-    'num_class': 3,
-    'eta': 0.1,
-    'max_depth': 6,
-    'subsample': 0.8,
-    'colsample_bytree': 0.8,
-    'min_child_weight': 3,
-    'reg_alpha': 0.1,      # Loose L1
-    'reg_lambda': 1.0,     # Loose L2
-    'eval_metric': 'mlogloss',
-    'n_estimators': 500,
-    'early_stopping_rounds': 50
-}
-```
+| Metric | Value |
+|---|---|
+| Accuracy | **45.79 %** |
+| Macro-F1 | 0.4295 |
+| **MAE (grades)** | **0.712** |
+| Adjacent accuracy (±1) | 86.54 % |
+| Quadratic weighted kappa | 0.6500 |
+| AUC (grade ≥ 4) | 0.8094 |
+| Majority-class baseline | 36.1 % |
+
+**Cross-district (district-grouped) results** are the honest "works in a country we have no data for"
+number: **33.44 % accuracy / MAE 0.933 / QWK 0.482 / ±1 79.4 %**, against 29.53 % / 1.017 / 0.399 /
+76.2 % for the unconstrained variant on identical folds. Same-district accuracy overstates transfer by
+roughly 12 points, so quote the grouped figure whenever the claim is about Myanmar.
+
+Comparisons on the same split:
+
+| Model | Accuracy | MAE | Notes |
+|---|---:|---:|---|
+| **Deployed `models_v3m`** (form features + distance, monotone) | 45.79 % | 0.712 | what ships |
+| `models_v3` (same features, unconstrained) | 53.99 % | 0.589 | loses on every grouped metric |
+| Same, with the form's uncollected fields zero-filled | 50.19 % | 0.632 | the cost of a user skipping the new sections |
+| Upper bound with ward-level ShakeMap intensity | 56.29 % | 0.550 | not shippable: no intensity field exists for a hypothetical event at an arbitrary site |
+| Retired 3-class artifact, as the API fed it | 19.3 % | 1.065 | on the DrivenData table |
+
+### What did not work (measured, not assumed)
+
+New globally-available site features (SRTM topography, USGS ShakeMap intensity measures including site
+velocity) gained +1.13 points same-district and **lost 1.19 points cross-district** — they encode which
+district a building is in. Loss functions aimed directly at MAE, threshold tuning, SMOTE-style
+oversampling, soft-label mixup, seed ensembling and a two-stage structural-index hybrid were all
+neutral or negative. District/ward identity features gain ~13 points on a random split and lose ~9.5
+on unseen districts. Full tables: the ML research notes (`backend/docs` deliberately does not restate
+them).
 
 ---
 
-## Validation Script
+## 6. Retraining
 
 ```bash
-# Full pipeline validation including ML
-python scripts/validate_pipeline.py
-
-# Output includes:
-# Scenario                    Resilience    Hazard    Chunks  LLM Conf  Time
-# RC Engineered - Dhaka       72.50         45.2      5       0.87      12.34
-# Mud Mortar Stone - Kathmandu 23.10        67.8      4       0.82      14.12
-# Adobe Mud - Rural Myanmar   12.30         34.5      3       0.79      11.89
+cd ~/HermesWork/resilienceai-ml-research
+SMOKE=1 .venv/bin/python train_v3.py          # ~3 min sanity pass on a 20k subsample — always first
+.venv/bin/python train_v3.py                  # full run, ~25 min on 4 cores
+.venv/bin/python train_v3_monotone.py         # the constrained variant
+.venv/bin/python verify_v3_served.py          # service-path accuracy + archetype checks
 ```
+
+Then copy `ordinal_grade_gt*.pkl` + `model_metadata.json` into
+`backend/models/seismic_damage_v3/` and restart the backend. Splits are seeded (42) and the data
+hashes in the metadata identify the exact inputs.
+
+---
+
+## 7. Limitations
+
+| Limitation | Consequence |
+|---|---|
+| **Trained on one earthquake in one country** (Nepal 2015, 11 districts) | It is a screening model for buildings and sites resembling Nepal's 2015 stock. Mid-rise engineered RC frames, common in Yangon and Mandalay, are barely represented (4.2 % RC foundations). |
+| **Same-district vs cross-district gap** | Random-split accuracy is optimistic by roughly 17 points for districts the model has never seen. Quote the grouped number when the claim is "works anywhere". |
+| **Distance is monotone only because it is constrained** | The deployed model constrains `P(grade>k)` to be non-increasing in distance, which costs 8.2 points same-district and buys ~4 points cross-district. See §3. |
+| **Weakly shaken sites are out of distribution** | Every training building was strongly shaken (MMI 6.24–8.0). A low-hazard site still gets a comparatively high damage estimate; gate low-hazard sites rather than trusting the raw number. |
+| **No multi-hazard input** | Flood and cyclone are not modelled. |
+| **Point predictions with real uncertainty** | The distribution is calibrated, but there is no conformal interval or quantile regression; the spread is the model's, not a coverage guarantee. |

@@ -33,6 +33,7 @@ from project_schema import (
     EnvironmentalContext,
 )
 from services.resilience_service import predict_resilience
+from services.damage_model import load_damage_model
 from services.hazard_engine import calculate_hazard_pydantic
 from services.llm_services import create_llm_service
 from services.retrieval import build_default_retriever
@@ -99,20 +100,20 @@ SCENARIOS = [
 
 
 def load_model():
+    """Load the damage model bundle (ordinal, damage grades 1-5)."""
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    model_path = os.path.join(base_dir, "..", "models", "seismic_resilience_xgb.pkl")
-    schema_path = os.path.join(base_dir, "..", "models", "model_features.json")
-    model = joblib.load(model_path)
-    with open(schema_path, "r") as f:
-        expected_features = json.load(f)
-    return model, expected_features
+    bundle_dir = os.path.join(base_dir, "..", "models", "seismic_damage_v3")
+    model = load_damage_model(bundle_dir)
+    if model is None:
+        raise SystemExit(f"Damage model bundle not found at {bundle_dir}")
+    return model
 
 
-def run_assessment(raw_input, model, expected_features, llm_service):
+def run_assessment(raw_input, model, llm_service):
     """Run the full pipeline and return LLM output + timing."""
     building_input = BuildingInput(**raw_input)
     resilience_result = predict_resilience(
-        payload=building_input, model=model, expected_features=expected_features,
+        payload=building_input, damage_model=model,
     )
 
     hazard_input = HazardInput(
@@ -214,7 +215,7 @@ def main():
     print("RESILIENCEAI — BASELINE vs RAG COMPARISON")
     print("=" * 70)
 
-    model, expected_features = load_model()
+    model = load_model()
     retriever = build_default_retriever()
 
     if retriever is None:
@@ -234,13 +235,13 @@ def main():
         # Run baseline (no RAG)
         print("\n  → Running baseline (no RAG)...")
         baseline = run_assessment(
-            scenario["input"], model, expected_features, baseline_service
+            scenario["input"], model, baseline_service
         )
 
         # Run RAG
         print("  → Running RAG...")
         rag = run_assessment(
-            scenario["input"], model, expected_features, rag_service
+            scenario["input"], model, rag_service
         )
 
         # Compare

@@ -13,13 +13,13 @@ After inspecting the codebase (backend at `D:\Work\Projects\ResillienceAI\backen
 
 | File | Role |
 |---|---|
-| `main.py` | App factory, lifespan that loads `seismic_resilience_xgb.pkl` + `model_features.json` from `backend/models/` into `app.state` |
+| `main.py` | App factory, lifespan that loads the ordinal damage model bundle (`models/seismic_damage_v3/`) into `app.state.damage_model` |
 | `routes/resilience.py` | `POST /api/resilience/assess` — runs the XGBoost model and returns a 0–100 resilience score + `building_llm_context` |
 | `routes/hazard.py` | `POST /api/hazard/calculate` — runs the hazard engine for a coordinate and returns a `HazardReport` including `environmental_context` |
 | `routes/llm.py` | `POST /api/llm/analysis` — thin wrapper around `LLMService.analyze(input)` |
-| `routes/assessment.py` | `POST /api/assessment/process` — **the orchestrator** (SSE streamed). Runs resilience + hazard in parallel, then calls LLM, then persists to Neon Postgres |
-| `services/pipeline.py` | `StructuralFeatureExtractor` (sklearn transformer), `process_and_align_inference_data` (train/inference schema alignment) |
-| `services/resilience_engine.py` | Maps `predict_proba` → 0–100 resilience score via `(P_low * 100) + (P_med * 45)` |
+| `routes/assessment.py` | `POST /api/assessment/process` — **the orchestrator** (SSE streamed). Runs hazard first, then building damage (conditioned on the hazard engine's governing event distance), then LLM, then persists to Neon Postgres |
+| `services/pipeline.py` | `StructuralFeatureExtractor`, `process_and_align_inference_data` (retired — was the old model's feature engineering; see `services/damage_model.py` for the current path) |
+| `services/resilience_engine.py` | `calculate_resilience_score` — legacy score calculation (retired from the main inference path) |
 | `services/llm_services.py` | `GenAIClient` (Gemini 2.5 Flash, 3-retry exponential backoff, schema cleaning) + `LLMService.analyze()` with strict 6-bullet / 5-recommendation prompt |
 | `services/hazard_engine/` | Location → seismic/soil/fault analysis → `EnvironmentalContext` (Pydantic) |
 | `richtor_mappings.py` | **Already contains authoritative vulnerability descriptions** for foundation, roof, ground floor types (R/I/U/W/H for foundation; N/Q/X for roof; F/V/X/M/Z for floor) |
@@ -49,33 +49,39 @@ class LLMAnalysisOutput(BaseModel):
 Traced from `routes/assessment.py:process_assessment()`:
 
 ```
-[POST /api/assessment/process  — payload = AssessmentRequest (lat, lon, 11 building fields)]
+[POST /api/assessment/process  — payload = AssessmentRequest (lat, lon, 22 building fields)]
         │
         ▼
 [SSE stage_started: "initializing"]
         │
         ├── build HazardInput(lat, lon, search_radius_km=100, historical_years=50, min_mag=4.5)
-        ├── build BuildingInput(11 building fields)
+        ├── build BuildingInput(building fields)
         │
 [SSE stage_completed: "initializing"]
         │
-[SSE stage_started: "resilience"] + [SSE stage_started: "hazard"]  (parallel)
-        │
-        ├── asyncio.to_thread(calculate_pure_resilience, payload, request)
-        │       └─ predict_resilience() → ResilienceAssessmentResponse
-        │             • runs process_and_align_inference_data
-        │             • runs calculate_resilience_score
-        │             • builds BuildingLLMContext (structural / material / substructure dicts)
+[SSE stage_started: "hazard"]
         │
         └── asyncio.create_task(calculate_hazard_route(inputs))
                 └─ calculate_hazard_pydantic() → HazardReport
                       • events list (USGS), faults, soil, ground motion
                       • builds EnvironmentalContext (hazard_score, hazard_level,
                         historical_activity, faults, soil, ground_motion, summary[])
+
+        await hazard_task
         │
-        await asyncio.gather(building_task, hazard_task)
+[SSE stage_completed: "hazard"]
         │
-[SSE stage_completed: "resilience"] + [SSE stage_completed: "hazard"]
+[SSE stage_started: "resilience"]
+        │
+        └── asyncio.to_thread(calculate_pure_resilience, payload, request, epi_distance_km)
+                └─ predict_resilience() → ResilienceAssessmentResponse
+                      • builds feature frame via damage_model.build_features()
+                      • runs ordinal damage model (grades 1-5)
+                      • builds BuildingLLMContext (structural / material / substructure dicts)
+
+        await resilience_task
+        │
+[SSE stage_completed: "resilience"]
         │
 [SSE stage_started: "llm"]
         │
@@ -101,7 +107,7 @@ Traced from `routes/assessment.py:process_assessment()`:
 [SSE type: "complete" — assessment_id]
 ```
 
-**Critical observation for RAG design**: the LLM call is the only sequential blocking step after the parallel pair. It's also wrapped in `asyncio.to_thread` because Gemini is synchronous. **This is exactly the right place to insert retrieval** — it adds latency, but the user is already in the "AI feedback" loading stage, so a 200–500 ms retrieval cost is invisible.
+**Critical observation for RAG design**: the LLM call is a sequential step after the hazard and building-damage stages. It's wrapped in `asyncio.to_thread` because Gemini is synchronous. **This is exactly the right place to insert retrieval** — it adds latency, but the user is already in the "AI feedback" loading stage, so a 200–500 ms retrieval cost is invisible.
 
 The two pieces of context passed to the prompt today (`BuildingLLMContext` and `EnvironmentalContext`) are already structured. Retrieval can be **conditioned on fields in these two structures** — we don't need a free-form query.
 

@@ -87,71 +87,11 @@ llm_service = create_llm_service(retriever=retriever)
 
 ---
 
-### Stage 2: Parallel Execution
+### Stage 2: Sequential Execution
 
-Both tracks run concurrently via `asyncio.gather()`:
+The hazard engine runs first, then the building damage model (which conditions on the distance to the governing earthquake the hazard engine found):
 
-#### Track A: Resilience (ML Inference)
-
-**Location:** `services/resilience_service.py` → `predict_resilience()`
-
-```python
-def predict_resilience(payload: BuildingInput, model, expected_features):
-    # 1. Convert to dict
-    raw_input = payload.model_dump()
-    
-    # 2. Feature engineering & alignment (services/pipeline.py)
-    dataframe = process_and_align_inference_data(
-        raw_input_dict=raw_input,
-        trained_model=model,
-        expected_features_list=expected_features
-    )
-    
-    # 3. XGBoost prediction
-    score = calculate_resilience_score(model, dataframe)
-    
-    # 4. Build LLM context
-    context_data = {
-        "structural": {...},
-        "material": {...},
-        "substructure": {...}
-    }
-    building_context = BuildingLLMContext.model_validate(context_data)
-    
-    return ResilienceAssessmentResponse(
-        status="success",
-        resilience_score=round(float(score), 2),
-        building_llm_context=building_context
-    )
-```
-
-**Key Functions:**
-
-| Function | File | Purpose |
-|----------|------|---------|
-| `process_and_align_inference_data` | `services/pipeline.py` | Feature engineering, scaling, one-hot encoding, schema alignment |
-| `calculate_resilience_score` | `services/resilience_engine.py` | Convert XGBoost probabilities to 0-100 resilience score |
-| `StructuralFeatureExtractor` | `services/pipeline.py` | Sklearn transformer for feature engineering |
-
-**Feature Engineering Details (`pipeline.py`):**
-
-```python
-# 1. Scale physical dimensions to Richter dataset quantiles
-area_percentage, height_percentage = scale_user_inputs(plinth_area_sqft, height_ft)
-
-# 2. StructuralFeatureExtractor transforms:
-#    - Compute height_to_floor_ratio, area_to_height_ratio
-#    - Flag highly vulnerable materials (mud_mortar_stone, adobe_mud)
-#    - Flag engineered materials (rc_engineered, cement_mortar_brick)
-#    - Compute structural_age_stress = age * floors
-#    - Drop non-structural columns (geo_level_*, legal_ownership_status, etc.)
-
-# 3. One-hot encode categorical: foundation_type, roof_type, ground_floor_type
-
-# 4. Align to training schema (expected_features_list) - add missing as 0
-```
-
-#### Track B: Hazard Engine
+#### Step A: Hazard Engine
 
 **Location:** `services/hazard_engine/engine.py` → `calculate_hazard()`
 
@@ -206,10 +146,63 @@ async def calculate_hazard(latitude, longitude, search_radius_km, historical_yea
 
 **SSE Events:**
 ```json
-{"type": "stage_started", "stage": "resilience", "status": "Assessing building resilience..."}
 {"type": "stage_started", "stage": "hazard", "status": "Running environmental hazard engine..."}
-{"type": "stage_completed", "stage": "resilience"}
 {"type": "stage_completed", "stage": "hazard"}
+```
+
+#### Step B: Building Damage Model (conditioned on hazard output)
+
+**Location:** `services/resilience_service.py` → `predict_resilience()`
+
+```python
+def predict_resilience(payload: BuildingInput, damage_model: DamageModel, epi_distance_km=None):
+    # 1. Convert to dict
+    raw_input = payload.model_dump()
+    
+    # 2. Run ordinal damage model (grades 1-5)
+    prediction = damage_model.predict(raw_input, epi_distance_km=epi_distance_km)
+    
+    # 3. Build LLM context (structural / material / substructure + damage distribution)
+    context_data = {
+        "structural": {...},
+        "material": {...},
+        "substructure": {...},
+        "damage": {...}
+    }
+    building_context = BuildingLLMContext.model_validate(context_data)
+    
+    return ResilienceAssessmentResponse(
+        status="success",
+        resilience_score=round(float(prediction["resilience_score"]), 2),
+        building_llm_context=building_context,
+        model_version=prediction["model_version"],
+        expected_grade=prediction["expected_grade"],
+        grade_class=prediction["grade_class"],
+        probabilities=prediction["probabilities"],
+        p_severe_grade45=prediction["p_severe_grade45"],
+        used_fallback_model=False,
+        flags=prediction["flags"]
+    )
+```
+
+**Key Functions:**
+
+| Function | File | Purpose |
+|----------|------|---------|
+| `DamageModel.build_features` | `services/damage_model.py` | App code → survey vocabulary mapping, site term, one-hot encoding |
+| `DamageModel.predict` | `services/damage_model.py` | Ordinal model inference: 4 boosters → grade probabilities |
+| `predict_resilience` | `services/resilience_service.py` | Orchestrator + LLM context builder |
+
+**Damage Model Details:**
+- **Ordinal model**: Four binary XGBoost boosters predict P(grade > k) for k=1..4
+- **Site term**: Epicentral distance to the governing earthquake (from hazard engine)
+- **Feature construction**: 54 model inputs from `model_metadata.json["features"]`
+- **Output**: Resilience score (0-100), grade probabilities (5 grades), expected grade, severe-damage probability
+
+**SSE Events:**
+```json
+{"type": "stage_started", "stage": "resilience", "status": "Assessing building resilience..."}
+{"type": "stage_completed", "stage": "resilience"}
 ```
 
 ---
@@ -512,8 +505,8 @@ yield sse_event({
 | Stage | Typical Duration | Bottleneck |
 |-------|------------------|------------|
 | Initialization | ~50ms | Pydantic validation |
-| Resilience (ML) | ~200ms | XGBoost inference (CPU) |
 | Hazard | 3-8s | USGS API (6s timeout), SoilGrids WCS |
+| Resilience (ML) | ~200ms | Ordinal damage model (CPU-bound, conditioned on site term) |
 | LLM | 3-8s | Gemini API latency |
 | Persistence | ~100ms | Neon round-trip + geocoding |
 | **Total** | **6-17s** | External APIs |
@@ -532,19 +525,8 @@ yield sse_event({
 process_assessment()
 ├─ assessment_generator()
 │  ├─ INITIALIZING
-│  ├─ PARALLEL:
-│  │  ├─ asyncio.to_thread(calculate_pure_resilience)
-│  │  │   └─ predict_resilience()
-│  │  │       ├─ process_and_align_inference_data()
-│  │  │       │   ├─ scale_user_inputs()
-│  │  │       │   ├─ StructuralFeatureExtractor.fit_transform()
-│  │  │       │   ├─ pd.get_dummies()
-│  │  │       │   └─ reindex to expected_features
-│  │  │       ├─ calculate_resilience_score()
-│  │  │       │   └─ model.predict_proba() → weighted score
-│  │  │       └─ BuildingLLMContext construction
-│  │  │
-│  │  └─ asyncio.create_task(calculate_hazard_route)
+│  ├─ HAZARD (runs first):
+│  │  └─ calculate_hazard_route()
 │  │      └─ calculate_hazard_pydantic()
 │  │          └─ calculate_hazard()
 │  │              ├─ query_usgs_catalog()
@@ -557,6 +539,17 @@ process_assessment()
 │  │              ├─ calculate_gutenberg_richter()
 │  │              ├─ integrate_shakemap_data()
 │  │              └─ build response objects
+│  │
+│  ├─ BUILDING DAMAGE (conditioned on hazard):
+│  │  └─ asyncio.to_thread(calculate_pure_resilience)
+│  │      └─ predict_resilience()
+│  │          ├─ damage_model.build_features()
+│  │          │   ├─ survey vocabulary mapping
+│  │          │   ├─ one-hot categoricals
+│  │          │   └─ site term (epi_distance_km from hazard)
+│  │          ├─ damage_model.predict()
+│  │          │   └─ 4 ordinal boosters → grade probabilities
+│  │          └─ BuildingLLMContext construction
 │  │
 │  ├─ LLM ANALYSIS
 │  │  ├─ LLMAnalysisInput construction

@@ -42,6 +42,8 @@ class BuildingInput(BaseModel):
 - Categorical codes lowercased
 - Material flags are 0/1 (exactly one should be 1 in practice)
 
+> **Note:** The above shows the original 13 fields. The full 22-field contract (including `land_surface_condition`, `position`, `plan_configuration`, `other_floor_type`, and 5 additional superstructure flags) is defined in `backend/docs/model_v3_contract.md`.
+
 ---
 
 ### 2. HazardInput
@@ -133,13 +135,20 @@ class LLMGroundMotionContext(BaseModel):
 ---
 
 ### 5. ResilienceAssessmentResponse
-**ML pipeline output + LLM context.**
+**ML pipeline output + LLM context + damage distribution.**
 
 ```python
 class ResilienceAssessmentResponse(BaseModel):
     status: str
     resilience_score: float
     building_llm_context: BuildingLLMContext
+    model_version: Optional[str] = None
+    expected_grade: Optional[float] = None
+    grade_class: Optional[int] = None
+    probabilities: Optional[Dict[str, float]] = None
+    p_severe_grade45: Optional[float] = None
+    used_fallback_model: bool = False
+    flags: List[str] = []
 ```
 
 ---
@@ -351,25 +360,30 @@ class Assessment(Base):
 
 ## Data Transformations
 
-### 1. BuildingInput → ML Feature Matrix
-**Location:** `services/pipeline.py:process_and_align_inference_data()`
+### 1. BuildingInput → Damage Model Features
+**Location:** `services/damage_model.py:DamageModel.build_features()`
 
 ```
-BuildingInput (12 fields)
+BuildingInput (22 fields)
     → model_dump() → dict
-    → scale_user_inputs() → area_percentage, height_percentage
-    → StructuralFeatureExtractor → derived features + drops
-    → pd.get_dummies() → one-hot encoded categoricals
-    → reindex(expected_features) → 121-column DataFrame
+    → app code → survey vocabulary mapping (foundation_type, roof_type, ground_floor_type)
+    → one-hot categoricals (survey categories)
+    → superstructure flags (11 binary fields)
+    → derived features (storey_height_ft, slenderness, age_floors)
+    → site term (epi_distance_km from hazard engine)
+    → reindex(model_metadata.json["features"]) → 54-column DataFrame
 ```
 
-### 2. ML Output → ResilienceAssessmentResponse
+### 2. Damage Model Output → ResilienceAssessmentResponse
 **Location:** `services/resilience_service.py:predict_resilience()`
 
 ```
-XGBoost predict_proba → probabilities[0, 1, 2]
-    → calculate_resilience_score → P(Low)*100 + P(Med)*45
-    → BuildingLLMContext from raw_input + decode_building_feature
+DamageModel.predict(payload, epi_distance_km)
+    → 4 ordinal boosters → P(grade > k) for k=1..4
+    → grade probabilities (5 grades, cumulative monotonicity enforced)
+    → expected_grade = 1 + sum(P(grade > k))
+    → resilience_score = 100 × (5 - expected_grade) / 4
+    → BuildingLLMContext from raw_input + decode_building_feature + damage distribution
     → ResilienceAssessmentResponse
 ```
 
@@ -391,7 +405,8 @@ USGS events + SoilGrids + Faults + Scoring
 AssessmentRequest (combined)
     → exclude lat/lon → BuildingInput
     → HazardInput(lat, lon, defaults)
-    → parallel: calculate_pure_resilience + calculate_hazard_route
+    → hazard first: calculate_hazard_route
+    → then building: calculate_pure_resilience (conditioned on site term)
     → merge → LLMAnalysisInput
 ```
 

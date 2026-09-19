@@ -1,0 +1,230 @@
+{
+  "features": [
+    "count_floors_pre_eq",
+    "age_building",
+    "plinth_area_sq_ft",
+    "height_ft_pre_eq",
+    "has_superstructure_adobe_mud",
+    "has_superstructure_mud_mortar_stone",
+    "has_superstructure_stone_flag",
+    "has_superstructure_cement_mortar_stone",
+    "has_superstructure_mud_mortar_brick",
+    "has_superstructure_cement_mortar_brick",
+    "has_superstructure_timber",
+    "has_superstructure_bamboo",
+    "has_superstructure_rc_non_engineered",
+    "has_superstructure_rc_engineered",
+    "has_superstructure_other",
+    "storey_height_ft",
+    "slenderness",
+    "age_floors",
+    "land_surface_condition_Flat",
+    "land_surface_condition_Moderate slope",
+    "land_surface_condition_Steep slope",
+    "foundation_type_Bamboo/Timber",
+    "foundation_type_Cement-Stone/Brick",
+    "foundation_type_Mud mortar-Stone/Brick",
+    "foundation_type_Other",
+    "foundation_type_RC",
+    "roof_type_Bamboo/Timber-Heavy roof",
+    "roof_type_Bamboo/Timber-Light roof",
+    "roof_type_RCC/RB/RBC",
+    "ground_floor_type_Brick/Stone",
+    "ground_floor_type_Mud",
+    "ground_floor_type_Other",
+    "ground_floor_type_RC",
+    "ground_floor_type_Timber",
+    "other_floor_type_Not applicable",
+    "other_floor_type_RCC/RB/RBC",
+    "other_floor_type_TImber/Bamboo-Mud",
+    "other_floor_type_Timber-Planck",
+    "position_Attached-1 side",
+    "position_Attached-2 side",
+    "position_Attached-3 side",
+    "position_Not attached",
+    "plan_configuration_Building with Central Courtyard",
+    "plan_configuration_E-shape",
+    "plan_configuration_H-shape",
+    "plan_configuration_L-shape",
+    "plan_configuration_Multi-projected",
+    "plan_configuration_Others",
+    "plan_configuration_Rectangular",
+    "plan_configuration_Square",
+    "plan_configuration_T-shape",
+    "plan_configuration_U-shape",
+    "epi_distance_km",
+    "has_distance"
+  ],
+  "n_features": 54,
+  "model": "ordinal cumulative-link decomposition, monotone in epi_distance_km (4 x binary XGBClassifier, P(grade>k))",
+  "target": "damage_grade 1..5",
+  "trained_on_rows": 533465,
+  "split": [
+    533465,
+    76210,
+    152419
+  ],
+  "seed": 42,
+  "thresholds": {
+    "default": [
+      0.5,
+      0.5,
+      0.5,
+      0.5
+    ]
+  },
+  "best_iterations": [
+    779,
+    998,
+    998,
+    999
+  ],
+  "monotone_constraints": "epi_distance_km = -1, all other columns 0",
+  "metrics": {
+    "E1m_monotone__full": {
+      "accuracy": 0.4579,
+      "macro_f1": 0.4295,
+      "mae": 0.7118,
+      "adjacent_accuracy": 0.8654,
+      "qwk": 0.65,
+      "per_class_recall": [
+        0.477,
+        0.265,
+        0.231,
+        0.575,
+        0.547
+      ],
+      "auc_grade4_5": 0.8094,
+      "best_iterations": [
+        779,
+        998,
+        998,
+        999
+      ]
+    },
+    "monotonicity_audit": {
+      "mud_stone_3st_40y": [
+        {
+          "distance_km": 2,
+          "expected_grade": 4.902,
+          "grade_class": 5
+        },
+        {
+          "distance_km": 5,
+          "expected_grade": 4.902,
+          "grade_class": 5
+        },
+        {
+          "distance_km": 10,
+          "expected_grade": 4.895,
+          "grade_class": 5
+        },
+        {
+          "distance_km": 20,
+          "expected_grade": 4.159,
+          "grade_class": 4
+        },
+        {
+          "distance_km": 30,
+          "expected_grade": 4.079,
+          "grade_class": 4
+        },
+        {
+          "distance_km": 50,
+          "expected_grade": 4.079,
+          "grade_class": 4
+        },
+        {
+          "distance_km": 75,
+          "expected_grade": 3.986,
+          "grade_class": 4
+        },
+        {
+          "distance_km": 100,
+          "expected_grade": 3.976,
+          "grade_class": 4
+        },
+        {
+          "distance_km": 150,
+          "expected_grade": 3.889,
+          "grade_class": 4
+        },
+        {
+          "distance_km": 200,
+          "expected_grade": 2.496,
+          "grade_class": 3
+        }
+      ],
+      "engineered_rc_4st_5y": [
+        {
+          "distance_km": 2,
+          "expected_grade": 3.56,
+          "grade_class": 4
+        },
+        {
+          "distance_km": 5,
+          "expected_grade": 3.56,
+          "grade_class": 4
+        },
+        {
+          "distance_km": 10,
+          "expected_grade": 3.545,
+          "grade_class": 4
+        },
+        {
+          "distance_km": 20,
+          "expected_grade": 3.052,
+          "grade_class": 3
+        },
+        {
+          "distance_km": 30,
+          "expected_grade": 2.169,
+          "grade_class": 2
+        },
+        {
+          "distance_km": 50,
+          "expected_grade": 1.948,
+          "grade_class": 2
+        },
+        {
+          "distance_km": 75,
+          "expected_grade": 1.712,
+          "grade_class": 1
+        },
+        {
+          "distance_km": 100,
+          "expected_grade": 1.646,
+          "grade_class": 1
+        },
+        {
+          "distance_km": 150,
+          "expected_grade": 1.601,
+          "grade_class": 1
+        },
+        {
+          "distance_km": 200,
+          "expected_grade": 1.231,
+          "grade_class": 1
+        }
+      ]
+    }
+  },
+  "site_contract": "epi_distance_km = great-circle distance from the site to the epicentre of the governing event; P(grade>k) is constrained non-increasing in it.",
+  "model_version": "damage-v3m-monotone",
+  "monotone_rationale": "P(grade>k) constrained non-increasing in epi_distance_km. Costs accuracy on a random split (53.99% -> 45.79%) but wins on district-grouped folds, which is the metric that matters for a country the model has never seen: 33.44% vs 29.53% accuracy, MAE 0.933 vs 1.017 (3 folds, 40k rows).",
+  "grouped_cv": {
+    "dataset": "40k-row district-stratified subsample, 3 folds, 0% seen districts",
+    "monotone": {
+      "accuracy": 0.3344,
+      "mae": 0.9328,
+      "qwk": 0.4818,
+      "adjacent_accuracy": 0.794
+    },
+    "unconstrained": {
+      "accuracy": 0.2953,
+      "mae": 1.0166,
+      "qwk": 0.399,
+      "adjacent_accuracy": 0.762
+    }
+  }
+}

@@ -19,6 +19,21 @@ class BuildingInput(BaseModel):
     has_superstructure_adobe_mud: int = Field(..., ge=0, le=1)
     has_superstructure_timber: int = Field(..., ge=0, le=1)
 
+    # ---------------------------------------------------------------------------------------
+    # Field-survey inputs added with the damage model v3 (see docs/model_v3_contract.md).
+    # Optional with the training population's modal value as the default, so payloads written
+    # before these fields existed still validate and still score.
+    # ---------------------------------------------------------------------------------------
+    land_surface_condition: str = Field("Flat", description="Flat | Moderate slope | Steep slope")
+    position: str = Field("Not attached", description="How many sides touch neighbouring buildings")
+    plan_configuration: str = Field("Rectangular", description="Building footprint shape in plan")
+    other_floor_type: str = Field("TImber/Bamboo-Mud", description="Floor above the ground floor")
+    has_superstructure_stone_flag: int = Field(0, ge=0, le=1)
+    has_superstructure_cement_mortar_stone: int = Field(0, ge=0, le=1)
+    has_superstructure_mud_mortar_brick: int = Field(0, ge=0, le=1)
+    has_superstructure_bamboo: int = Field(0, ge=0, le=1)
+    has_superstructure_other: int = Field(0, ge=0, le=1)
+
     @field_validator('foundation_type', 'roof_type', 'ground_floor_type')
     @classmethod
     def validate_categorical_codes(cls, v: str) -> str:
@@ -28,11 +43,24 @@ class BuildingLLMContext(BaseModel):
     structural: Dict[str, Any]
     material: Dict[str, Any]
     substructure: Dict[str, Any]
+    # Damage-model output (grade distribution, severe-damage probability). Added with model v3;
+    # defaulted so assessments stored before the change still validate.
+    damage: Dict[str, Any] = Field(default_factory=dict)
 
 class ResilienceAssessmentResponse(BaseModel):
     status: str
     resilience_score: float
     building_llm_context: BuildingLLMContext
+
+    # Damage-model v3 outputs. Optional so assessments stored before the model change still
+    # validate when they are read back out of the JSONB column.
+    model_version: Optional[str] = None
+    expected_grade: Optional[float] = None
+    grade_class: Optional[int] = None
+    probabilities: Optional[Dict[str, float]] = None
+    p_severe_grade45: Optional[float] = None
+    used_fallback_model: Optional[bool] = None
+    flags: Optional[List[str]] = None
 
 class HazardInput(BaseModel):
     latitude: float
@@ -109,6 +137,9 @@ class LLMSoilContext(BaseModel):
 class LLMGroundMotionContext(BaseModel):
     estimated_mmi: float
     estimated_pga_g: float
+    # The catalogued event that governs the reported ground motion (id, magnitude, distance_km,
+    # depth_km, date, place). Optional: absent when no significant event was found in the radius.
+    governing_event: Optional[Dict[str, Any]] = None
     confidence: float
 
 
@@ -189,6 +220,19 @@ class AssessmentRequest(BaseModel):
     has_superstructure_rc_non_engineered: int = Field(..., ge=0, le=1)
     has_superstructure_adobe_mud: int = Field(..., ge=0, le=1)
     has_superstructure_timber: int = Field(..., ge=0, le=1)
+
+    # Field-survey inputs added with damage model v3 (see docs/model_v3_contract.md).
+    # Defaulted to the training population's modal values so an older client still validates.
+    land_surface_condition: str = "Flat"
+    position: str = "Not attached"
+    plan_configuration: str = "Rectangular"
+    other_floor_type: str = "TImber/Bamboo-Mud"
+    has_superstructure_stone_flag: int = Field(0, ge=0, le=1)
+    has_superstructure_cement_mortar_stone: int = Field(0, ge=0, le=1)
+    has_superstructure_mud_mortar_brick: int = Field(0, ge=0, le=1)
+    has_superstructure_bamboo: int = Field(0, ge=0, le=1)
+    has_superstructure_other: int = Field(0, ge=0, le=1)
+
 
 class SaveAssessmentRequest(BaseModel):
     profile: BuildingInput

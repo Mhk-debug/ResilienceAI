@@ -130,6 +130,7 @@ async def calculate_hazard(
         "ground_motion": {
             "estimated_mmi": shakemap_data["peak_mmi"],
             "estimated_pga_g": shakemap_data["peak_pga"],
+            "governing_event": shakemap_data.get("governing_event"),
             "confidence": confidence
         },
         "summary": summary_sentences

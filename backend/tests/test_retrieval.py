@@ -347,8 +347,12 @@ class TestEmbedder:
             # Normalized embedding: unit length
             norm = np.linalg.norm(emb)
             assert abs(norm - 1.0) < 0.01
-        except ImportError:
-            pytest.skip("sentence-transformers not installed")
+        except ImportError as exc:
+            # The module-level importorskip already guarantees the package is
+            # importable, so reaching here means a real failure (for example
+            # httpx refusing a SOCKS proxy, or a missing model cache) — report
+            # it instead of hiding it behind a green skip.
+            pytest.fail(f"sentence-transformers is installed but the embedder failed: {exc}")
 
     def test_embed_batch(self):
         try:
@@ -356,8 +360,12 @@ class TestEmbedder:
             texts = ["First sentence.", "Second sentence.", "Third sentence."]
             embs = embedder.embed(texts)
             assert embs.shape == (3, embedder.dimension)
-        except ImportError:
-            pytest.skip("sentence-transformers not installed")
+        except ImportError as exc:
+            # The module-level importorskip already guarantees the package is
+            # importable, so reaching here means a real failure (for example
+            # httpx refusing a SOCKS proxy, or a missing model cache) — report
+            # it instead of hiding it behind a green skip.
+            pytest.fail(f"sentence-transformers is installed but the embedder failed: {exc}")
 
     def test_embed_empty(self):
         embedder = Embedder()
@@ -845,10 +853,16 @@ class TestRetrievalIntegration:
 
         try:
             count = self._build_test_index(temp_chroma_dir, kb_dir)
-        except ImportError:
-            pytest.skip("sentence-transformers not installed")
+        except ImportError as exc:
+            # The module-level importorskip already guarantees the package is
+            # importable, so reaching here means a real failure (for example
+            # httpx refusing a SOCKS proxy, or a missing model cache) — report
+            # it instead of hiding it behind a green skip.
+            pytest.fail(f"sentence-transformers is installed but the embedder failed: {exc}")
         except Exception as e:
-            pytest.skip(f"Index build failed (dependencies?): {e}")
+            # A failing index build is a real defect, not a reason for the test
+            # to disappear from the run.
+            pytest.fail(f"Index build failed: {e}")
 
         if count == 0:
             pytest.skip("No chunks indexed (empty knowledge base)")
@@ -861,8 +875,12 @@ class TestRetrievalIntegration:
             results = retriever.retrieve(
                 mud_mortar_building_context, high_hazard_environmental_context
             )
-        except ImportError:
-            pytest.skip("sentence-transformers not installed")
+        except ImportError as exc:
+            # The module-level importorskip already guarantees the package is
+            # importable, so reaching here means a real failure (for example
+            # httpx refusing a SOCKS proxy, or a missing model cache) — report
+            # it instead of hiding it behind a green skip.
+            pytest.fail(f"sentence-transformers is installed but the embedder failed: {exc}")
 
         # Should return results (exact count depends on KB content)
         assert len(results) > 0, "Should retrieve at least one chunk"
@@ -897,10 +915,14 @@ class TestRetrievalIntegration:
 
         try:
             count = self._build_test_index(temp_chroma_dir, kb_dir)
-        except ImportError:
-            pytest.skip("sentence-transformers not installed")
-        except Exception:
-            pytest.skip("Index build failed")
+        except ImportError as exc:
+            # The module-level importorskip already guarantees the package is
+            # importable, so reaching here means a real failure (for example
+            # httpx refusing a SOCKS proxy, or a missing model cache) — report
+            # it instead of hiding it behind a green skip.
+            pytest.fail(f"sentence-transformers is installed but the embedder failed: {exc}")
+        except Exception as exc:
+            pytest.fail(f"Index build failed: {exc}")
 
         if count == 0:
             pytest.skip("No chunks indexed")
@@ -912,8 +934,12 @@ class TestRetrievalIntegration:
             results = retriever.retrieve(
                 rc_engineered_building_context, high_hazard_environmental_context
             )
-        except ImportError:
-            pytest.skip("sentence-transformers not installed")
+        except ImportError as exc:
+            # The module-level importorskip already guarantees the package is
+            # importable, so reaching here means a real failure (for example
+            # httpx refusing a SOCKS proxy, or a missing model cache) — report
+            # it instead of hiding it behind a green skip.
+            pytest.fail(f"sentence-transformers is installed but the embedder failed: {exc}")
 
         assert len(results) > 0
         # RC building should not retrieve mud mortar stone as top result
@@ -938,10 +964,14 @@ class TestRetrievalIntegration:
 
         try:
             count = self._build_test_index(temp_chroma_dir, kb_dir)
-        except ImportError:
-            pytest.skip("sentence-transformers not installed")
-        except Exception:
-            pytest.skip("Index build failed")
+        except ImportError as exc:
+            # The module-level importorskip already guarantees the package is
+            # importable, so reaching here means a real failure (for example
+            # httpx refusing a SOCKS proxy, or a missing model cache) — report
+            # it instead of hiding it behind a green skip.
+            pytest.fail(f"sentence-transformers is installed but the embedder failed: {exc}")
+        except Exception as exc:
+            pytest.fail(f"Index build failed: {exc}")
 
         if count == 0:
             pytest.skip("No chunks indexed")
@@ -953,8 +983,12 @@ class TestRetrievalIntegration:
             results = retriever.retrieve(
                 mud_mortar_building_context, low_hazard_environmental_context
             )
-        except ImportError:
-            pytest.skip("sentence-transformers not installed")
+        except ImportError as exc:
+            # The module-level importorskip already guarantees the package is
+            # importable, so reaching here means a real failure (for example
+            # httpx refusing a SOCKS proxy, or a missing model cache) — report
+            # it instead of hiding it behind a green skip.
+            pytest.fail(f"sentence-transformers is installed but the embedder failed: {exc}")
 
         assert len(results) > 0
         # Environmental results should mention low hazard

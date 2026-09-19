@@ -212,9 +212,9 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ## Key Design Decisions
 
 ### Why XGBoost for Damage Prediction?
-- Trained on Richter Predictor dataset (Nepal 2015) with 3 damage grades
-- Ordinal nature handled naturally by tree-based ensemble (no ordinal regression needed)
-- MAE ~0.60 with loose regularization outperforms constrained ordinal models
+- Ordinal model over damage grades 1-5: four binary XGBoost boosters predict P(grade > k)
+- Trained on the 2015 Nepal Building Structure Survey (762K labelled buildings)
+- Replaces the retired 3-class DrivenData classifier
 
 ### Why Deterministic Hazard Engine?
 - No ML model for hazard — uses physics-based formulas (exponential decay, Gutenberg-Richter)
@@ -278,8 +278,12 @@ backend/
 │   ├── session.py # SQLAlchemy engine, session, Base
 │   └── models.py              # Assessment ORM model (JSONB columns)
 ├── models/
-│   ├── seismic_resilience_xgb.pkl   # Trained XGBoost model
-│   └── model_features.json          # Expected feature list (121 features)
+│   ├── seismic_damage_v3/           # Active ordinal damage model (grades 1-5)
+│   │   ├── ordinal_grade_gt1..4.pkl # 4 binary XGBoost boosters
+│   │   └── model_metadata.json      # 54 model inputs
+│   └── retired/                     # Old artifacts (no longer loaded)
+│       ├── seismic_resilience_xgb.pkl
+│       └── model_features.json
 ├── routes/
 │   ├── __init__.py
 │   ├── assessment.py          # SSE orchestration endpoint

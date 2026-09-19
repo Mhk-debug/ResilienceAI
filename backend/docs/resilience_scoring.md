@@ -1,179 +1,179 @@
 # Resilience Scoring Documentation
 
-> **How the structural resilience score is calculated from XGBoost damage grade probabilities**
+> **How the building damage model turns a building profile + site into a damage distribution, a
+> 0–100 resilience score, and a composite risk score.**
+
+The scoring engine was replaced in September 2026. The previous version read three class
+probabilities (`P(Low)/P(Medium)/P(High)`) out of a 3-class DrivenData-trained classifier and
+combined them as `P(Low)·100 + P(Medium)·45`. That model was retired because the API only ever
+supplied 13 of its 43 inputs (the rest were constant zeros) and it measured 19.3 % accuracy on the
+served path against a 56.9 % majority-class baseline. The current engine is described below; the
+measured performance lives in `machine_learning.md` and in
+`backend/models/seismic_damage_v3/MODEL_CARD.md`.
 
 ---
 
-## Overview
+## What the model outputs
 
-The **Structural Seismic Resilience Score (0–100)** translates the XGBoost model's damage grade probabilities into a continuous metric where:
-- **100** = Extremely resilient (very low damage probability)
-- **0** = Extremely fragile (very high collapse probability)
+An ordinal model over damage grades 1–5 (1 = no damage, 5 = destruction), implemented as a
+cumulative-link decomposition: four binary boosters estimate `P(grade > k)` for k = 1…4, and the
+five class probabilities are recovered from consecutive differences:
+
+```
+P(grade = 1) = 1 − P(grade > 1)
+P(grade = 2) = P(grade > 1) − P(grade > 2)
+...
+P(grade = 5) = P(grade > 4)
+
+E[grade] = 1 + Σ_k P(grade > k)
+```
+
+Independently trained binaries can cross (`P(grade > 2) > P(grade > 1)`), which would produce a
+negative probability. `services/damage_model.py` enforces `P(grade > k) ≤ P(grade > k−1)` with
+`np.minimum.accumulate` and records a caveat in the response `flags` when it fires.
 
 ---
 
-## Score Formula
+## The 0–100 resilience score
 
 ```python
-# From services/resilience_engine.py
-
-def calculate_resilience_score(trained_model, feature_matrix):
-    # probabilities shape: (N, 3)
-    # Col 0: P(Low Damage / Grade 1)
-    # Col 1: P(Medium Damage / Grade 2)
-    # Col 2: P(High Damage / Grade 3)
-    probabilities = trained_model.predict_proba(feature_matrix)
-    
-    low_damage_prob = probabilities[:, 0]
-    med_damage_prob = probabilities[:, 1]
-    
-    # Expected value weighting
-    resilience_scores = (low_damage_prob * 100) + (med_damage_prob * 45)
-    
-    return float(np.round(resilience_scores[0], 2))
+# services/damage_model.py
+expected_grade = 1.0 + sum(P_grade_gt_k)
+resilience_score = clip(100.0 * (5.0 - expected_grade) / 4.0, 0, 100)
 ```
 
-### Weighting Rationale
+- **100** — the model expects no damage (`E[grade] = 1`), the building is effectively untested
+- **0** — the model expects total destruction (`E[grade] = 5`)
 
-| Damage Grade | Probability | Weight | Contribution |
-|--------------|-------------|--------|--------------|
-| Grade 1 (Low) | P₁ | 100 | P₁ × 100 |
-| Grade 2 (Medium) | P₂ | 45 | P₂ × 45 |
-| Grade 3 (High) | P₃ | 0 | P₃ × 0 |
+Because `E[grade]` is a continuous expectation, the score is continuous even though the model is a
+classifier. Two buildings with the same most-likely grade get different scores when their
+distributions differ in spread.
 
-**Why these weights?**
-- **Low damage (100)**: Building essentially undamaged, fully functional
-- **Medium damage (45)**: Significant structural damage, repairable but major cost/disruption; life safety generally preserved
-- **High damage (0)**: Near collapse or collapse; total loss, life safety threatened
+### Interpretation
 
-The weights represent **expected post-earthquake utility** on a 0–100 scale.
+| Resilience score | Expected grade | Reading |
+|---|---|---|
+| 85–100 | ≤ 1.6 | **Highly resilient** — damage, if any, is cosmetic |
+| 60–84 | 1.6–2.6 | **Resilient** — repairable damage expected |
+| 35–59 | 2.6–3.6 | **Vulnerable** — structural damage likely; retrofit worth costing |
+| 0–34 | > 3.6 | **Highly vulnerable** — severe damage or collapse probable |
+
+### Reporting the uncertainty, not just the number
+
+The response carries the whole distribution:
+
+| Field | Meaning |
+|---|---|
+| `probabilities` | `{grade1 … grade5}`, the model's calibrated class probabilities |
+| `expected_grade` | `E[grade]`, what the score is derived from |
+| `grade_class` | the most likely single grade (max probability) |
+| `p_severe_grade45` | `P(grade ≥ 4)` — severe damage or collapse |
+| `flags` | model caveats: extrapolated site term, non-monotone correction, missing inputs |
+
+The dashboard shows these as a stacked distribution plus a severe-damage callout, deliberately
+instead of a single number: the model's own calibration is exact (mean predicted
+`P(grade = 1)` 0.103 vs observed 0.103 on held-out data), so the spread is information the user
+should see.
 
 ---
 
-## Score Interpretation
+## Relationship to the hazard score
 
-| Resilience Score | Damage Grade | Interpretation |
-|------------------|--------------|----------------|
-| **85–100** | Grade 1 (Low) | **Highly Resilient** — Minor non-structural damage expected |
-| **55–84** | Grade 1–2 | **Moderately Resilient** — Some structural damage possible, repairable |
-| **30–54** | Grade 2 (Medium) | **Vulnerable** — Significant structural damage likely |
-| **0–29** | Grade 2–3 | **Highly Vulnerable** — Severe damage or collapse probable |
+| Aspect | Resilience score | Hazard score |
+|---|---|---|
+| Source | Building + site distance (ML) | Site environment (deterministic engine) |
+| Range | 0–100 | 0–100 |
+| Meaning | Damage this building takes when shaken | How violent the shaking at this site can be |
+| High = good | Yes | No (high = worse) |
 
----
-
-## Relationship to Hazard Score
-
-The resilience score and hazard score are **independent but combined** in the final assessment:
-
-| Aspect | Resilience Score | Hazard Score |
-|--------|------------------|--------------|
-| **Source** | Building structure (ML) | Site environment (deterministic) |
-| **Range** | 0–100 | 0–100 |
-| **Meaning** | Building's inherent capacity | Ground shaking demand |
-| **High = Good** | Yes | No (High = Bad) |
-
-**Combined Risk Mental Model:**
-```
-Risk ≈ Hazard Demand / Structural Capacity
-      ≈ Hazard_Score / Resilience_Score
-```
-
-- High Hazard + Low Resilience = **Critical Risk**
-- Low Hazard + High Resilience = **Low Risk**
-- High Hazard + High Resilience = **Managed Risk** (engineered for the hazard)
-- Low Hazard + Low Resilience = **Moderate Risk** (unreinforced masonry in stable zone)
+The two are **not independent**: the damage model conditions on the epicentral distance to the
+governing event the hazard engine identified. That is a deliberate one-directional dependency —
+hazard engine first, then the building — and it is why the composite score is a product rather than a
+sum.
 
 ---
 
-## Example Calculations
+## Composite risk score
 
-### Example 1: RC Engineered Building
 ```
-XGBoost Probabilities: P(Low)=0.65, P(Med)=0.30, P(High)=0.05
-Resilience = 0.65*100 + 0.30*45 + 0.05*0 = 65 + 13.5 = 78.5
-→ "Moderately Resilient"
+vulnerability = (expected_grade − 1) / 4          # 0 = no damage expected, 1 = destruction
+risk_score    = (hazard_score / 100) × vulnerability × 100
 ```
 
-### Example 2: Mud Mortar Stone Building
-```
-XGBoost Probabilities: P(Low)=0.10, P(Med)=0.35, P(High)=0.55
-Resilience = 0.10*100 + 0.35*45 + 0.55*0 = 10 + 15.75 = 25.75
-→ "Highly Vulnerable"
+The previous formula was `hazard·0.6 + (100 − resilience)·0.4`. Once the damage model is conditioned
+on the site's shaking, that counted shaking twice: the hazard score already expresses how violent the
+ground motion is, and the resilience term then encoded it again. The product form keeps both terms
+meaningful — *hazard* is the demand, *vulnerability* is the response.
+
+### Risk bands
+
+```typescript
+// frontend/utils/risk.ts
+risk ≤ 15  → Low
+risk ≤ 30  → Moderate
+risk ≤ 45  → High
+risk > 45  → Critical
 ```
 
-### Example 3: Uncertain Prediction
+Band edges are the vulnerability thresholds for minor / moderate / severe expected damage (0.25 /
+0.50 / 0.75 on the damage ratio) scaled by a reference hazard score of 60. They are deliberately not
+population terciles: the training population is a strongly shaken, heavily damaged one (median
+vulnerability 0.72), so terciles would place almost every realistic assessment in the top band.
+
+### Worked example
+
+Mandalay (21.9769, 96.0836), mud-mortar stone, 3 storeys, 42 years, moderate slope, attached on two
+sides:
+
 ```
-XGBoost Probabilities: P(Low)=0.33, P(Med)=0.34, P(High)=0.33
-Resilience = 0.33*100 + 0.34*45 = 33 + 15.3 = 48.3
-→ "Vulnerable" (model uncertain, medium damage likely)
+hazard score          70.1 / 100          (governing event M7.7, 15.65 km away)
+probabilities         g1 0.001  g2 0.143  g3 0.697  g4 0.045  g5 0.115
+E[grade]              3.13                → resilience score 46.76
+vulnerability         0.53
+risk_score            (70.1/100) × 0.53 × 100 = 37   → High
+p_severe_grade45      0.16
 ```
 
 ---
 
-## Integration with LLM Context
+## Integration with the LLM context
 
-The resilience score and building context are combined into `BuildingLLMContext` for the LLM prompt:
+`services/resilience_service.py` puts the distribution into `BuildingLLMContext.damage` so the model
+reasons about the severe-damage probability and the spread, not just a point score:
 
 ```python
-# In services/resilience_service.py
-
-context_data = {
-    "structural": {
-        "floors": raw_input["count_floors_pre_eq"],
-        "age_years": raw_input["age"],
-        "floor_area_sq_feets": raw_input["area_sq_ft"],
-        "height_feets": raw_input["height_ft"]
-    },
-    "material": {
-        "roof_type": decode_building_feature("roof_type", roof_code),
-        "foundation_type": decode_building_feature("foundation_type", foundation_code),
-        "ground_floor_type": decode_building_feature("ground_floor_type", floor_code)
-    },
-    "substructure": {
-        "mud_mortar_stone": bool(raw_input["has_superstructure_mud_mortar_stone"]),
-        "cement_brick": bool(raw_input["has_superstructure_cement_mortar_brick"]),
-        "rc_engineered": bool(raw_input["has_superstructure_rc_engineered"]),
-        "rc_non_engineered": bool(raw_input["has_superstructure_rc_non_engineered"]),
-        "adobe_mud": bool(raw_input["has_superstructure_adobe_mud"]),
-        "timber": bool(raw_input["has_superstructure_timber"])
-    }
+"damage": {
+    "expected_damage_grade": 3.13,
+    "most_likely_grade": 3,
+    "grade_probabilities": {"grade1": 0.0011, "grade2": 0.1425, "grade3": 0.6966,
+                            "grade4": 0.045, "grade5": 0.1147},
+    "severe_damage_probability_grade4_or_5": 0.1597,
+    "resilience_score": 46.76,
+    "model_version": "damage-v3-ordinal",
 }
-
-building_context = BuildingLLMContext.model_validate(context_data)
 ```
-
-This context is passed to the LLM alongside the environmental context for joint reasoning.
 
 ---
 
 ## Validation & Testing
 
 ```bash
-# Run validation script
-python scripts/validate_pipeline.py
-
-# Sample output:
-# RC Engineered - Dhaka:       Resilience=72.50
-# Mud Mortar Stone - Kathmandu: Resilience=23.10
-# Adobe Mud - Rural Myanmar:    Resilience=12.30
+cd backend && .venv/bin/python -m pytest -q          # 102 tests
+.venv/bin/python scripts/validate_pipeline.py        # per-scenario scores + distributions
 ```
 
----
-
-## Known Behaviors
-
-| Behavior | Explanation |
-|----------|-------------|
-| Score never exceeds 100 | Max P(Low)=1.0 → 100 |
-| Score can be 0 | P(Low)=0, P(Med)=0 → 0 |
-| Medium damage caps contribution | Even at P(Med)=1.0, max contribution = 45 |
-| Rounding | Final score rounded to 2 decimal places |
+`validate_pipeline.py` prints the resilience score, expected grade, severe-damage probability and the
+full distribution for each scenario, and surfaces any model caveats.
 
 ---
 
-## Future Considerations
+## Known behaviours
 
-- **Uncertainty quantification**: Add prediction intervals via quantile regression or conformal prediction
-- **Ordinal calibration**: Ensure P(Low) > P(Med) > P(High) for typical buildings
-- **Regional calibration**: Adjust weights for different building codes (e.g., MNBC 2016 vs pre-code)
-- **Multi-hazard**: Extend to wind/flood resilience scoring
+| Behaviour | Explanation |
+|---|---|
+| Score can be exactly 100 | only when the model puts essentially all mass on grade 1 |
+| Score can be 0 | only when the model puts essentially all mass on grade 5 |
+| Score moves with the site | the model's site term is the distance to the governing event, so the same building scores differently at different sites — that is intended |
+| Site term is bounded | the training range is 2.4–215.5 km; outside it the response carries an extrapolation caveat |
+| Out-of-distribution shaking | the training data is entirely strongly-shaken buildings (MMI 6.24–8.0). Weakly shaken sites are a known limitation, not a solved case |
+| Rounding | the score is rounded to 2 decimals in the response |

@@ -18,19 +18,23 @@
         │
         ▼
 ┌─────────────────────────────────────────────────────┐
-│ 2. PARALLEL ANALYSIS (asyncio.gather)               │
+│ 2. SEQUENTIAL ANALYSIS                               │
 │                                                     │
-│   ┌─────────────────────┐   ┌─────────────────────┐ │
-│   │ ML Resilience Model │   │ Hazard Engine       │ │
-│   │                     │   │                     │ │
-│   │ XGBoost → 0-100     │   │ USGS events         │ │
-│   │ score               │   │ Fault proximity     │ │
-│   │                     │   │ Soil classification │ │
-│   │ BuildingLLMContext  │   │ Ground motion       │ │
-│   │   • structural      │   │                     │ │
-│   │   • material        │   │ EnvironmentalContext│ │
-│   │   • substructure    │   │                     │ │
-│   └─────────────────────┘   └─────────────────────┘ │
+│   ┌───────────────────────────────────────────────┐  │
+│   │ Step A: Hazard Engine                         │  │
+│   │   USGS events, fault proximity,               │  │
+│   │   soil classification, ground motion          │  │
+│   │   → EnvironmentalContext + governing distance │  │
+│   └───────────────────────────────────────────────┘  │
+│                        │                            │
+│                        ▼                            │
+│   ┌───────────────────────────────────────────────┐  │
+│   │ Step B: Building Damage Model                 │  │
+│   │   Ordinal model (grades 1-5) conditioned      │  │
+│   │   on the site's governing event distance      │  │
+│   │   → ResilienceAssessmentResponse              │  │
+│   │   → BuildingLLMContext                        │  │
+│   └───────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────┘
         │
         ▼
@@ -102,11 +106,11 @@
 ```
 FastAPI lifespan
         │
-        ├── Load ML model (joblib)
-        │   • seismic_resilience_xgb.pkl
-        │   • model_features.json
-        │   → app.state.model
-        │   → app.state.expected_features
+        ├── Load ordinal damage model bundle
+        │   • models/seismic_damage_v3/
+        │     - ordinal_grade_gt1..4.pkl (4 boosters)
+        │     - model_metadata.json (54 features)
+        │   → app.state.damage_model
         │
         ├── Initialize retriever (optional)
         │   • build_default_retriever()
