@@ -168,7 +168,7 @@ def sample_retrieval_results() -> List[MockRetrievalResult]:
             chunk_id="doc1__chunk_0",
             text="Mud mortar stone buildings are highly vulnerable to seismic shaking. "
                  "Typical failure modes include out-of-plane wall collapse and corner separation.",
-            score=0.85,
+            score=0.912,
             metadata={
                 "category": "building_vulnerability",
                 "title": "Mud Mortar Stone Vulnerability",
@@ -182,7 +182,7 @@ def sample_retrieval_results() -> List[MockRetrievalResult]:
             chunk_id="doc2__chunk_0",
             text="Soft clay soils (Site Class E) amplify seismic waves by 2-3x. "
                  "Liquefaction risk is high in saturated loose sands and silts.",
-            score=0.78,
+            score=0.734,
             metadata={
                 "category": "environmental_hazards",
                 "title": "Soil Amplification",
@@ -226,7 +226,10 @@ class TestBackwardCompatibility:
         """Prompt should not contain RETRIEVED KNOWLEDGE when no retriever."""
         service = LLMService(client=mock_genai_client)
         service.analyze(mock_input)
-        assert "RETRIEVED KNOWLEDGE" not in mock_genai_client.last_prompt
+        # The fixed prompt instructions mention "RETRIEVED KNOWLEDGE" (in the
+        # output requirements), so assert on the section header (with colon)
+        # that only appears when knowledge is actually injected.
+        assert "RETRIEVED KNOWLEDGE:" not in mock_genai_client.last_prompt
 
 
 # ──────────────────────────────────────────────────────────────
@@ -282,9 +285,11 @@ class TestRetrievalIntegration:
         assert "FEMA" in prompt
         assert "USGS" in prompt
         assert "building_vulnerability" in prompt
-        # Should NOT contain scores
-        assert "0.85" not in prompt
-        assert "0.78" not in prompt
+        # Should NOT contain scores (sample scores use unique values so they
+        # cannot collide with the fixed "confidence": 0.85 example in the
+        # prompt's output-format instructions)
+        assert "0.912" not in prompt
+        assert "0.734" not in prompt
 
     def test_prompt_contains_reference_numbers(self, mock_genai_client, mock_input, sample_retrieval_results):
         """Prompt should number references (Reference 1, Reference 2)."""
@@ -329,7 +334,7 @@ class TestEmptyResults:
         retriever = MockRetriever(results=[])
         service = LLMService(client=mock_genai_client, retriever=retriever)
         service.analyze(mock_input)
-        assert "RETRIEVED KNOWLEDGE" not in mock_genai_client.last_prompt
+        assert "RETRIEVED KNOWLEDGE:" not in mock_genai_client.last_prompt
 
     def test_empty_results_still_returns_valid_output(self, mock_genai_client, mock_input):
         """analyze() should still return valid output with empty results."""
@@ -380,7 +385,7 @@ class TestFailureHandling:
         retriever.should_fail = True
         service = LLMService(client=mock_genai_client, retriever=retriever)
         service.analyze(mock_input)
-        assert "RETRIEVED KNOWLEDGE" not in mock_genai_client.last_prompt
+        assert "RETRIEVED KNOWLEDGE:" not in mock_genai_client.last_prompt
 
     def test_retrieval_failure_prompt_unchanged(self, mock_genai_client, mock_input):
         """Prompt after failure should match no-retriever baseline."""
@@ -395,6 +400,70 @@ class TestFailureHandling:
         failure_prompt = mock_genai_client.last_prompt
 
         assert baseline_prompt == failure_prompt
+
+
+# ──────────────────────────────────────────────────────────────
+# Tests: Deterministic Fallback (Gemini unavailable)
+# ──────────────────────────────────────────────────────────────
+
+
+class FailingGenAIClient(MockGenAIClient):
+    """A mock client that always raises — forces the deterministic fallback."""
+
+    def generate(self, prompt: str, schema: Dict[str, Any], max_retries: int = 3) -> Dict[str, Any]:
+        raise RuntimeError("Simulated Gemini outage")
+
+
+class TestFallbackAnalysis:
+    """LLMService must degrade to a deterministic analysis when Gemini fails."""
+
+    def test_fallback_fills_schema(self, mock_input):
+        service = LLMService(client=FailingGenAIClient())
+        result, evidence_map = service.analyze(mock_input)
+        assert isinstance(result, LLMAnalysisOutput)
+        assert len(result.summary) == 6
+        assert len(result.recommendations) == 5
+        assert result.confidence < 1.0
+        assert result.risk_interpretation.structural_assessment
+        assert result.risk_interpretation.environmental_assessment
+        assert evidence_map == {}
+
+    def test_fallback_is_data_aware(self, mock_input):
+        service = LLMService(client=FailingGenAIClient())
+        result, _ = service.analyze(mock_input)
+        # Environmental data is reflected in the generated text
+        assert "85" in result.summary[1].text  # mock env hazard_score = 85.0
+        # All recommendation priorities are valid
+        priorities = {r.priority for r in result.recommendations}
+        assert priorities <= {"red", "orange", "yellow", "green"}
+        assert priorities
+
+    def test_fallback_yields_vulnerability_recs(self, mock_input):
+        service = LLMService(client=FailingGenAIClient())
+        result, _ = service.analyze(mock_input)
+        titles = " ".join(r.title.lower() for r in result.recommendations)
+        # mock building has mud-mortar-stone substructure
+        assert "wall" in titles or "retrofit" in titles
+
+    def test_fallback_attaches_retrieved_evidence(self, mock_input, sample_retrieval_results):
+        retriever = MockRetriever(results=sample_retrieval_results)
+        service = LLMService(client=FailingGenAIClient(), retriever=retriever)
+        result, evidence_map = service.analyze(mock_input)
+        assert evidence_map  # citations built from retrieved chunks
+        cited_ids = {i for s in result.summary for i in s.evidence_ids}
+        cited_ids |= {i for r in result.recommendations for i in r.evidence_ids}
+        assert cited_ids
+        assert set(cited_ids) <= set(evidence_map.keys())
+        # at least one recommendation carries a citation (for the expandable cards)
+        assert any(r.evidence_ids for r in result.recommendations)
+        ev = next(iter(evidence_map.values()))
+        assert ev.source_org and ev.excerpt
+
+    def test_real_client_used_when_available(self, mock_genai_client, mock_input):
+        service = LLMService(client=mock_genai_client)
+        result, _ = service.analyze(mock_input)
+        assert mock_genai_client.generate_call_count == 1
+        assert result.confidence == 0.85  # from the client, not the fallback
 
 
 # ──────────────────────────────────────────────────────────────
@@ -451,8 +520,8 @@ class TestFormatting:
     def test_format_no_scores(self, sample_retrieval_results):
         """Formatted output must not contain similarity scores."""
         formatted = LLMService._format_retrieved_knowledge(sample_retrieval_results)
-        assert "0.85" not in formatted
-        assert "0.78" not in formatted
+        assert "0.912" not in formatted
+        assert "0.734" not in formatted
         assert "score" not in formatted.lower()
 
     def test_format_contains_metadata(self, sample_retrieval_results):
@@ -580,7 +649,7 @@ class TestEvidenceMapBuilding:
         assert "doc2__chunk_0" not in evidence_map  # Not cited
         assert isinstance(evidence_map["doc1__chunk_0"], EvidenceCitation)
         assert evidence_map["doc1__chunk_0"].source_org == "FEMA"
-        assert evidence_map["doc1__chunk_0"].relevance_score == 0.85
+        assert evidence_map["doc1__chunk_0"].relevance_score == 0.912
 
     def test_build_map_with_invalid_ids(self, sample_retrieval_results):
         """Invalid cited IDs should be filtered out."""

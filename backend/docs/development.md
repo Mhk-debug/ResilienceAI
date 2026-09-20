@@ -156,8 +156,15 @@ backend/
 │   ├── session.py            # SQLAlchemy engine, session
 │   └── models.py             # Assessment ORM model
 ├── models/
-│   ├── seismic_resilience_xgb.pkl
-│   └── model_features.json
+│   ├── seismic_damage_v3/        # Active ordinal damage model (grades 1-5)
+│   │   ├── ordinal_grade_gt1.pkl
+│   │   ├── ordinal_grade_gt2.pkl
+│   │   ├── ordinal_grade_gt3.pkl
+│   │   ├── ordinal_grade_gt4.pkl
+│   │   └── model_metadata.json
+│   └── retired/                  # Old artifacts (no longer loaded)
+│       ├── seismic_resilience_xgb.pkl
+│       └── model_features.json
 ├── routes/
 │   ├── assessment.py         # SSE pipeline orchestration
 │   ├── resilience.py         # ML prediction endpoint
@@ -247,26 +254,22 @@ uvicorn main:app --reload --log-level debug
 ### 2. Inspect App State
 ```python
 # In any route, access loaded resources:
-model = request.app.state.model
-features = request.app.state.expected_features
+damage_model = request.app.state.damage_model
 retriever = request.app.state.retriever
 
-print(f"Model: {type(model)}")
-print(f"Features: {len(features)}")
+print(f"Model version: {damage_model.model_version}")
+print(f"Features: {len(damage_model.features)}")
 print(f"Retriever available: {retriever is not None}")
 ```
 
 ### 3. Test ML Pipeline In Isolation
 ```python
 # scripts/debug_ml.py
-import joblib
-import json
-from services.pipeline import process_and_align_inference_data
-from services.resilience_engine import calculate_resilience_score
+from services.damage_model import load_damage_model
+from project_schema import BuildingInput
 
-model = joblib.load("models/seismic_resilience_xgb.pkl")
-with open("models/model_features.json") as f:
-    features = json.load(f)
+bundle_dir = "models/seismic_damage_v3"
+damage_model = load_damage_model(bundle_dir)
 
 test_input = {
     "count_floors_pre_eq": 2,
@@ -284,9 +287,10 @@ test_input = {
     "has_superstructure_timber": 0,
 }
 
-df = process_and_align_inference_data(test_input, model, features)
-score = calculate_resilience_score(model, df)
-print(f"Resilience Score: {score}")
+prediction = damage_model.predict(test_input, epi_distance_km=50.0)
+print(f"Resilience Score: {prediction['resilience_score']}")
+print(f"Expected Grade: {prediction['expected_grade']}")
+print(f"Probabilities: {prediction['probabilities']}")
 ```
 
 ### 4. Test Hazard Engine In Isolation
@@ -374,9 +378,9 @@ python -m pytest tests/
 export PYTHONPATH=/path/to/ResilienceAI/backend:$PYTHONPATH
 ```
 
-### Issue: `FileNotFoundError: models/seismic_resilience_xgb.pkl`
-**Cause:** Model files missing or wrong working directory.
-**Fix:** Ensure you're in `backend/` directory when running uvicorn.
+### Issue: `FileNotFoundError: models/seismic_damage_v3/`
+**Cause:** Model bundle missing or wrong working directory.
+**Fix:** Ensure the `models/seismic_damage_v3/` directory and its files (`ordinal_grade_gt1..4.pkl`, `model_metadata.json`) exist in the `backend/` directory.
 
 ### Issue: `DATABASE_URL environment variable is missing`
 **Cause:** `.env` not loaded or missing.
@@ -507,6 +511,6 @@ git push origin feature/new-feature
 | Build KB index | `python scripts/build_kb_index.py --verbose` |
 | Validate pipeline | `python scripts/validate_pipeline.py` |
 | Check DB connection | `python -c "from database.session import engine; print(engine.execute('SELECT 1').scalar())"` |
-| View model features | `cat models/model_features.json \| jq` |
+| View model features | `cat models/seismic_damage_v3/model_metadata.json \| jq '.features' \| head` |
 | Format code | `black .` (if configured) |
 | Lint | `ruff check .` (if configured) |

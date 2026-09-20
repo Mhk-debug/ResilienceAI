@@ -36,18 +36,35 @@ def integrate_shakemap_data(events: List[Dict[str, Any]], lat: float, lon: float
     sig_events = [e for e in events if e["magnitude"] >= 5.5 and e["distance_km"] <= 80.0]
     peak_pga = 0.0
     peak_mmi = 1.0
-    
+    governing_event = None
+
     if sig_events:
         dominant = sorted(sig_events, key=lambda x: x["magnitude"], reverse=True)[0]
         est_pga = estimate_pga_g(dominant["magnitude"], dominant["distance_km"], dominant["depth_km"])
         peak_pga = est_pga
+        # The site MMI must stay consistent with the PGA computed from the same GMPE.
+        # It used to be replaced by `max_mmi * ratio`, which collapsed to 1.0 for any event
+        # more than a few km away (measured: a Gorkha ward at scenario MMI 8.0 reported
+        # MMI 1.0 alongside PGA 0.125 g, which implies ~MMI 5.5). The event's own peak MMI
+        # is only usable as an upper bound for the site.
         peak_mmi = pga_to_mmi(est_pga)
-        
+
         if dominant.get("max_mmi") is not None:
-            ratio = est_pga / estimate_pga_g(dominant["magnitude"], 1.0, dominant["depth_km"])
-            peak_mmi = max(1.0, min(12.0, dominant["max_mmi"] * (1.0 - (1.0 - ratio))))
-            
+            peak_mmi = min(peak_mmi, float(dominant["max_mmi"]))
+
+        # The event that governs the ground motion also governs the epicentral distance that the
+        # damage model conditions on, so report it rather than leaving the caller to guess.
+        governing_event = {
+            "id": dominant.get("id"),
+            "magnitude": round(float(dominant["magnitude"]), 2),
+            "distance_km": round(float(dominant["distance_km"]), 2),
+            "depth_km": round(float(dominant["depth_km"]), 2),
+            "date": dominant.get("date"),
+            "place": dominant.get("place"),
+        }
+
     return {
         "peak_pga": round(peak_pga, 4),
-        "peak_mmi": round(peak_mmi, 2)
+        "peak_mmi": round(max(peak_mmi, 1.0), 2),
+        "governing_event": governing_event
     }

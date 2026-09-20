@@ -22,6 +22,12 @@
 .DS_Store
 *.pem
 
+# python virtualenvs
+.venv/
+
+# local dev artifacts
+test.db
+
 # chroma vector store (local DB artifacts)
 backend/data/chroma/
 

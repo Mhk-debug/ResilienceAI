@@ -262,6 +262,21 @@ export default function ContributingFactors({
                                         {indicators.seismic_zone.classification}
                                     </span>
                                 </div>
+
+                                {ground_motion.governing_event && (
+                                    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1 border-t border-slate-300 pt-3">
+                                        <span className="max-w-[50%] text-sm font-medium text-slate-700">
+                                            Governing Event
+                                        </span>
+                                        <span className="text-right text-xs font-semibold text-slate-900">
+                                            M{ground_motion.governing_event.magnitude}
+                                            , {ground_motion.governing_event.distance_km} km away
+                                            {ground_motion.governing_event.date
+                                                ? `, ${ground_motion.governing_event.date.slice(0, 10)}`
+                                                : ""}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>

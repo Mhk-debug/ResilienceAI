@@ -34,6 +34,7 @@ from project_schema import (
 from services.pipeline import process_and_align_inference_data
 from services.resilience_engine import calculate_resilience_score
 from services.resilience_service import predict_resilience
+from services.damage_model import load_damage_model
 from services.hazard_engine import calculate_hazard_pydantic
 from services.llm_services import create_llm_service
 from services.retrieval import build_default_retriever
@@ -101,8 +102,8 @@ SCENARIOS = [
             "area_sq_ft": 1200,
             "height_ft": 45,
             "foundation_type": "u",  # Cement-Stone Masonry
-            "roof_type": "q",        # Corrugated Metal
-            "ground_floor_type": "v", # Brick/Stone floor
+            "roof_type": "q",        # Heavy bamboo/timber roof (mud-covered)
+            "ground_floor_type": "v", # RC floor
             "has_superstructure_mud_mortar_stone": 0,
             "has_superstructure_rc_engineered": 0,
             "has_superstructure_cement_mortar_brick": 1,
@@ -120,41 +121,42 @@ SCENARIOS = [
 
 
 def load_model():
-    """Load the ML model and feature schema."""
+    """Load the damage model bundle (ordinal, damage grades 1-5)."""
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    model_path = os.path.join(base_dir, "..", "models", "seismic_resilience_xgb.pkl")
-    schema_path = os.path.join(base_dir, "..", "models", "model_features.json")
+    bundle_dir = os.path.join(base_dir, "..", "models", "seismic_damage_v3")
 
-    if not os.path.exists(model_path) or not os.path.exists(schema_path):
-        logger.error("Model files not found. Run from backend/ directory.")
+    model = load_damage_model(bundle_dir)
+    if model is None:
+        logger.error("Damage model bundle not found at %s", bundle_dir)
         sys.exit(1)
 
-    model = joblib.load(model_path)
-    with open(schema_path, "r") as f:
-        expected_features = json.load(f)
-
-    logger.info("Model loaded: %s (%d features)", model_path, len(expected_features))
-    return model, expected_features
+    logger.info("Damage model loaded: %s (%d inputs)", model.model_version, len(model.features))
+    return model
 
 
-def run_scenario(name: str, raw_input: dict, model, expected_features, llm_service):
+def run_scenario(name: str, raw_input: dict, model, llm_service):
     """Run the full pipeline for one scenario and print results."""
     print("\n" + "=" * 70)
     print(f"SCENARIO: {name}")
     print("=" * 70)
 
     # ── Stage 1: ML Prediction ──
-    print("\n--- STAGE 1: ML Resilience Prediction ---")
+    print("\n--- STAGE 1: ML Damage Prediction ---")
     t0 = time.time()
 
     building_input = BuildingInput(**raw_input)
     resilience_result = predict_resilience(
         payload=building_input,
-        model=model,
-        expected_features=expected_features,
+        damage_model=model,
     )
     ml_elapsed = time.time() - t0
     print(f"  Resilience Score: {resilience_result.resilience_score:.2f}/100")
+    print(f"  Expected damage grade: {resilience_result.expected_grade} "
+          f"(most likely {resilience_result.grade_class}/5)")
+    print(f"  P(severe damage, grade 4-5): {resilience_result.p_severe_grade45}")
+    print(f"  Distribution: {resilience_result.probabilities}")
+    if resilience_result.flags:
+        print(f"  Model caveats: {'; '.join(resilience_result.flags)}")
     print(f"  Status: {resilience_result.status}")
     print(f"  Time: {ml_elapsed:.2f}s")
 
@@ -251,7 +253,7 @@ def main():
     print("=" * 70)
 
     # Load model
-    model, expected_features = load_model()
+    model = load_model()
 
     # Initialize retriever (may be None)
     retriever = build_default_retriever()
@@ -268,7 +270,6 @@ def main():
             name=scenario["name"],
             raw_input=scenario["input"],
             model=model,
-            expected_features=expected_features,
             llm_service=llm_service,
         )
         results.append(result)

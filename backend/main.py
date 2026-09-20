@@ -13,38 +13,47 @@ from routes.llm import router as llm_router
 from routes.assessment import router as assessment_router
 from routes.auth import router as auth_router
 
+# Ensure the schema exists on a fresh database (idempotent, no-op when
+# tables already exist). The database must exist before boot.
+from database.session import Base, engine
+
 logger = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(BASE_DIR, 'models', 'seismic_resilience_xgb.pkl')
-SCHEMA_PATH = os.path.join(BASE_DIR, 'models', 'model_features.json')
+DAMAGE_BUNDLE_DIR = os.path.join(BASE_DIR, 'models', 'seismic_damage_v3')
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handles the boot initialization and resource cleanup cycles."""
     try:
-        if not os.path.exists(MODEL_PATH) or not os.path.exists(SCHEMA_PATH):
+        # Create any missing tables (users, assessments) so a fresh database
+        # works without running an explicit migration/reset step first.
+        Base.metadata.create_all(bind=engine)
+
+        # Damage model: an ordinal grades-1-5 bundle (four boosters + metadata), not a bare
+        # pickle. Loading is synchronous/blocking, which is fine for the startup phase.
+        from services.damage_model import load_damage_model
+        damage_model = load_damage_model(DAMAGE_BUNDLE_DIR)
+        if damage_model is None:
             raise FileNotFoundError(
-                f"Required files missing in artifacts space. Check {MODEL_PATH} or {SCHEMA_PATH}"
+                f"Damage model bundle missing or unreadable at {DAMAGE_BUNDLE_DIR}"
             )
-        
-        # joblib loading is synchronous/blocking, perfect for startup phase
-        model = joblib.load(MODEL_PATH)
-        with open(SCHEMA_PATH, 'r') as f:
-            expected_features = json.load(f)
-            
-        logger.info(f"Artifacts loaded successfully. Ready to parse {len(expected_features)} inputs.")
-        
+
+        logger.info(
+            "Damage model loaded: %s with %d inputs.",
+            damage_model.model_version,
+            len(damage_model.features),
+        )
+
         # Initialize the retriever (may be None — graceful degradation)
         retriever = _init_retriever()
-        
-        # Inject models and retriever into app state for router access
-        app.state.model = model
-        app.state.expected_features = expected_features
+
+        # Inject the model and retriever into app state for router access
+        app.state.damage_model = damage_model
         app.state.retriever = retriever
-        
+
         yield
-        
+
     except Exception as e:
         logger.critical(f"Critical Boot Failure: {str(e)}", exc_info=True)
         raise e

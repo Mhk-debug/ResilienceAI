@@ -35,9 +35,9 @@ try:
         max_overflow=10,
         future=True,
         echo=False,
-        connect_args={
-        "sslmode": "require"
-        }
+        # No hardcoded sslmode: psycopg defaults to "prefer", which works with
+        # both local Postgres (no SSL) and remote URLs that carry ?sslmode=require.
+        connect_args={}
     )
 
 except SQLAlchemyError:

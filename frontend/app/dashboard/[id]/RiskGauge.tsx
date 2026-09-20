@@ -129,21 +129,21 @@ export default function RiskGauge({
     resilienceScore,
     hazardScore,
 }: RiskGaugeProps) {
-    // Determine color based on severity
+    // Determine color based on severity (band edges: 15 / 30 / 45 — see utils/risk.ts)
     let severityColor = "#3b82f6"; // Blue
     let severityBg = "bg-blue-50 border-blue-100";
     let severityText = "text-blue-700";
 
-    if (score >= 75) {
+    if (score > 45) {
         severityColor = "#ef4444";
         severityBg = "bg-rose-50 border-rose-100";
         severityText = "text-rose-700";
-    } else if (score >= 55) {
+    } else if (score > 30) {
         severityColor = "#f97316";
         severityBg = "bg-orange-50 border-orange-100";
         severityText = "text-orange-700";
-    } else if (score >= 35) {
-        severityColor = "#eab308";
+    } else if (score > 15) {
+        severityColor = "#f59e0b";
         severityBg = "bg-amber-50 border-amber-100";
         severityText = "text-amber-700";
     }
@@ -278,27 +278,27 @@ export default function RiskGauge({
                 <div className="w-full mt-8 space-y-2.5">
                     <div className="relative flex h-2.5 w-full rounded-full overflow-hidden border border-slate-200">
                         <div
-                            className="bg-blue-500 flex-35"
-                            title="Low Risk: 0-34"
+                            className="bg-blue-500 flex-15"
+                            title="Low risk: 0-15"
                         />
                         <div
-                            className="bg-amber-400 flex-20 border-l border-white"
-                            title="Moderate Threat: 35-54"
+                            className="bg-amber-400 flex-15 border-l border-white"
+                            title="Moderate risk: 16-30"
                         />
                         <div
-                            className="bg-orange-500 flex-20 border-l border-white"
-                            title="High Threat: 55-74"
+                            className="bg-orange-500 flex-15 border-l border-white"
+                            title="High risk: 31-45"
                         />
                         <div
-                            className="bg-red-500 flex-25 border-l border-white"
-                            title="Critical Threat: 75-100"
+                            className="bg-red-500 flex-55 border-l border-white"
+                            title="Critical risk: above 45"
                         />
                     </div>
                     <div className="flex justify-between text-[10px] font-bold text-slate-500 font-mono px-1">
-                        <span className="text-blue-600">0-34 Low</span>
-                        <span className="text-amber-600">35-54 Moderate</span>
-                        <span className="text-orange-600">55-74 High</span>
-                        <span className="text-red-600">75-100 Critical</span>
+                        <span className="text-blue-600">0-15 Low</span>
+                        <span className="text-amber-600">16-30 Moderate</span>
+                        <span className="text-orange-600">31-45 High</span>
+                        <span className="text-red-600">45+ Critical</span>
                     </div>
                 </div>
             </div>

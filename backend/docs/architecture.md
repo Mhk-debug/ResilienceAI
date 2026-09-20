@@ -21,22 +21,14 @@ graph TB
     Router --> Hazard[Hazard Router]
     Router --> LLM[LLM Router]
     
-    Lifespan -->|Load| MLModel[XGBoost Model]
-    Lifespan -->|Load| Features[Feature Schema]
+    Lifespan -->|Load| DamageModel[Ordinal Damage Model]
     Lifespan -->|Init| Retriever[RAG Retriever]
     
-    State --> MLModel
-    State --> Features
+    State --> DamageModel
     State --> Retriever
     
-    Assessment -->|Parallel| ResilienceSvc[Resilience Service]
-    Assessment -->|Parallel| HazardSvc[Hazard Engine]
-    
-    ResilienceSvc --> Pipeline[ML Pipeline]
-    Pipeline --> Model[XGBoost Inference]
-    Model --> ResilienceScore[Resilience Score]
-    Pipeline --> BuildingContext[BuildingLLMContext]
-    
+    Assessment -->|Sequential| HazardSvc[Hazard Engine]
+    HazardSvc -->|Site term| DamageSvc[Damage Model]
     HazardSvc --> USGS[USGS Catalog]
     HazardSvc --> SoilGrids[SoilGrids WCS]
     HazardSvc --> Faults[Fault Database]
@@ -82,20 +74,18 @@ graph TB
 ```python
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. Validate model files exist
-    # 2. Load XGBoost model via joblib
-    # 3. Load expected feature list from JSON
-    # 4. Initialize retriever (graceful degradation if unavailable)
-    # 5. Inject into app.state
+    # 1. Create database tables (idempotent)
+    # 2. Load ordinal damage model bundle from models/seismic_damage_v3/
+    # 3. Initialize retriever (graceful degradation if unavailable)
+    # 4. Inject into app.state
     yield
     # Cleanup (none currently)
 ```
 
 **App State:**
 ```python
-app.state.model              # XGBoost Booster
-app.state.expected_features  # List[str] (121 features)
-app.state.retriever          # Retriever | None
+app.state.damage_model      # DamageModel (ordinal grades 1-5)
+app.state.retriever         # Retriever | None
 ```
 
 ---
@@ -116,33 +106,28 @@ app.state.retriever          # Retriever | None
 
 ---
 
-### 3. ML Inference Pipeline
+### 3. Damage Model (`services/damage_model.py`)
 
 **Files:**
-- `services/pipeline.py` — `StructuralFeatureExtractor`, `scale_user_inputs`, `process_and_align_inference_data`
-- `services/resilience_engine.py` — `calculate_resilience_score`
-- `services/resilience_service.py` — `predict_resilience` (orchestrator)
+- `services/damage_model.py` — `DamageModel` class (ordinal grades 1-5), `load_damage_model()`
+- `services/resilience_service.py` — `predict_resilience` (orchestrator + LLM context builder)
 
 **Flow:**
 ```mermaid
 flowchart LR
     Input[BuildingInput\nPydantic] --> Dump[model_dump]
-    Dump --> DF[DataFrame\n1 row]
-    DF --> Scale[scale_user_inputs\narea_sq_ft → area_percentage\nheight_ft → height_percentage]
-    Scale --> Transform[StructuralFeatureExtractor\nfit_transform]
-    Transform --> OHE[pd.get_dummies\ncategorical encoding]
-    OHE --> Align[Reindex to\nexpected_features]
-    Align --> Predict[XGBoost predict_proba]
-    Predict --> Score[calculate_resilience_score\nP(Low)*100 + P(Med)*45]
-    Score --> Output[ResilienceAssessmentResponse]
+    Dump --> Build[build_features\nsurvey vocab mapping\n+ site term]
+    Build --> Predict[Ordinal Model\n4 XGBoost boosters\nP grade > k]
+    Predict --> Score[resilience_score\n100 × (5 - E[grade]) / 4]
+    Score --> Output[ResilienceAssessmentResponse\n+ BuildingLLMContext]
 ```
 
-**Feature Engineering Details:**
-- **Non-linear scaling**: Physical dimensions mapped to Richter dataset quantile codes via `np.interp`
-- **Derived features**: `height_to_floor_ratio`, `area_to_height_ratio`, `structural_age_stress`
-- **Material flags**: `is_highly_vulnerable_material`, `is_engineered_material`
-- **Categorical encoding**: One-hot for `foundation_type`, `roof_type`, `ground_floor_type`
-- **Schema alignment**: Missing columns filled with 0, reordered to match training (121 features)
+**Key Details:**
+- **Ordinal model**: Four binary XGBoost boosters predict P(grade > k) for k=1..4
+- **Site term**: Epicentral distance to the governing earthquake (from hazard engine)
+- **Feature construction**: App code → survey vocabulary mapping, one-hot categoricals, derived features
+- **Schema alignment**: 54 model inputs from `model_metadata.json["features"]`
+- **Output**: Resilience score (0-100), grade probabilities (5 grades), expected grade, severe-damage probability
 
 ---
 
@@ -340,14 +325,12 @@ sequenceDiagram
     Client->>POST /api/assessment/process: AssessmentRequest
     Server-->>Client: SSE: stage_started {initializing}
     Server-->>Client: SSE: stage_completed {initializing}
-    Server-->>Client: SSE: stage_started {resilience}
     Server-->>Client: SSE: stage_started {hazard}
-    par Parallel Execution
-        Server->>ThreadPool: calculate_pure_resilience
-        Server->>Async: calculate_hazard_route
-    end
-    Server-->>Client: SSE: stage_completed {resilience}
+    Server->>Hazard: calculate_hazard_route
     Server-->>Client: SSE: stage_completed {hazard}
+    Server-->>Client: SSE: stage_started {resilience}
+    Server->>Damage: calculate_pure_resilience (+ site term)
+    Server-->>Client: SSE: stage_completed {resilience}
     Server-->>Client: SSE: stage_started {llm}
     Server->>ThreadPool: llm_service.analyze
     Server-->>Client: SSE: stage_completed {llm}
@@ -361,8 +344,8 @@ sequenceDiagram
 | Stage | Duration | Notes |
 |-------|----------|-------|
 | Initializing | ~50ms | Payload validation |
-| Resilience (ML) | ~200ms | Thread pool, CPU-bound |
 | Hazard | ~3–8s | External API calls (USGS, SoilGrids) |
+| Resilience (ML) | ~200ms | Ordinal damage model (CPU-bound, conditioned on site term) |
 | LLM | ~3–8s | Gemini API, includes retrieval |
 | Saving | ~100ms | DB write |
 | **Total** | **6–17s** | Dominated by external APIs |
