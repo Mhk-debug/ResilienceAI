@@ -19,7 +19,6 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/lib/auth-context";
-import { BASE_API_URL } from "@/utils/constants";
 import {
   ChangePasswordModal,
   ChangeEmailModal,
@@ -35,15 +34,7 @@ function ProfileButton() {
   const [showVerifyEmail, setShowVerifyEmail] = useState(false);
 
   const handleLogout = async () => {
-    try {
-      await fetch(`${BASE_API_URL}/auth/logout`, {
-        method: "POST",
-        credentials: "include",
-      });
-    } catch {
-      // Logout even if server is unreachable
-    }
-    logout();
+    await logout();
     router.push("/login");
   };
 

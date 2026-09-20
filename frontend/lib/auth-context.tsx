@@ -14,7 +14,7 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: () => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
@@ -23,7 +23,7 @@ const AuthContext = createContext<AuthContextValue>({
   isAuthenticated: false,
   isLoading: true,
   login: async () => {},
-  logout: () => {},
+  logout: async () => {},
   refreshUser: async () => {},
 });
 
@@ -56,9 +56,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     checkAuth();
   }, [checkAuth]);
 
-  const logout = useCallback(() => {
-    setUser(null);
-    setIsAuthenticated(false);
+  const logout = useCallback(async () => {
+    // The access_token cookie is HttpOnly, so ending the session requires the
+    // server-side logout to clear it. Reset local state in `finally` so the UI
+    // reflects the user's intent even if the server is unreachable.
+    try {
+      await fetch(`${BASE_API_URL}/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch {
+      // Server unreachable — fall through and clear local state below.
+    } finally {
+      setUser(null);
+      setIsAuthenticated(false);
+    }
   }, []);
 
   const refreshUser = useCallback(async () => {

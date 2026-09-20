@@ -96,7 +96,16 @@ def create_cookie(response, token: str):
 
 
 def clear_cookie(response):
-    response.delete_cookie(key="access_token", httponly=True)
+    # Mirror the attributes used in create_cookie so the browser actually
+    # matches and deletes the cookie (path defaults to "/" in both calls).
+    # Without a matching `secure` flag, the deletion cookie will not remove a
+    # `Secure` login cookie in production.
+    response.delete_cookie(
+        key="access_token",
+        httponly=True,
+        samesite="lax",
+        secure=os.getenv("ENVIRONMENT") == "production",
+    )
 
 
 # ---------------------------------------------------------------------------
