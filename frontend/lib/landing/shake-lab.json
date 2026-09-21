@@ -1,0 +1,728 @@
+{
+ "generated_at": "2026-09-20T07:43:21+00:00",
+ "generator": "frontend/scripts/generate_shake_lab.py",
+ "model_version": "damage-v3m-monotone",
+ "bundle": "backend/models/seismic_damage_v3",
+ "provenance": {
+  "damage": "ordinal cumulative-link model (4 x binary XGBoost) over damage grades 1-5, trained on the 2015 Nepal Building Structure Survey; site term = epicentral distance to the governing event",
+  "hazard": "the app's own attenuation relation (estimate_pga_g) plus the piecewise PGA->MMI conversion, at a fixed hypocentral depth",
+  "event_depth_km": 10.0,
+  "note": "These are model outputs for fixed archetypes, so the page can show the real model without a live request. The live app scores real buildings.",
+  "archetype_order": "engineered_rc > brick_cement > timber_bamboo > mud_stone, asserted at every distance by the generator against measured mean damage grades in the training survey (1.443 / 1.954 / 3.390 / 3.966)"
+ },
+ "magnitudes": [
+  5.0,
+  5.5,
+  6.0,
+  6.5,
+  7.0,
+  7.5,
+  8.0
+ ],
+ "distances_km": [
+  5,
+  10,
+  25,
+  50,
+  100,
+  150
+ ],
+ "archetypes": {
+  "mud_stone": {
+   "label": "Mud-mortar stone masonry",
+   "blurb": "Rural load-bearing stone in mud mortar. The most common building in the 2015 Nepal survey and the worst performer in it.",
+   "icon": "stone"
+  },
+  "brick_cement": {
+   "label": "Cement-mortar brick, attached",
+   "blurb": "Brick in cement mortar, attached on two sides \u2014 a typical urban row building with pounding risk against its neighbours.",
+   "icon": "brick"
+  },
+  "timber_bamboo": {
+   "label": "Timber / bamboo on a slope",
+   "blurb": "Light single-storey timber with bamboo, on sloping ground. Flexible, but the site itself is working against it.",
+   "icon": "timber"
+  },
+  "engineered_rc": {
+   "label": "Engineered reinforced concrete",
+   "blurb": "A modern RC frame with an engineered design \u2014 the reference case for what a resilient building looks like in this model.",
+   "icon": "rc"
+  }
+ },
+ "hazard_by_magnitude_distance": [
+  {
+   "magnitude": 5.0,
+   "distance_km": 5,
+   "pga_g": 0.0965,
+   "mmi": 5.07
+  },
+  {
+   "magnitude": 5.0,
+   "distance_km": 10,
+   "pga_g": 0.0795,
+   "mmi": 4.83
+  },
+  {
+   "magnitude": 5.0,
+   "distance_km": 25,
+   "pga_g": 0.0412,
+   "mmi": 4.06
+  },
+  {
+   "magnitude": 5.0,
+   "distance_km": 50,
+   "pga_g": 0.0189,
+   "mmi": 3.29
+  },
+  {
+   "magnitude": 5.0,
+   "distance_km": 100,
+   "pga_g": 0.0074,
+   "mmi": 2.04
+  },
+  {
+   "magnitude": 5.0,
+   "distance_km": 150,
+   "pga_g": 0.0039,
+   "mmi": 1.59
+  },
+  {
+   "magnitude": 5.5,
+   "distance_km": 5,
+   "pga_g": 0.1477,
+   "mmi": 5.71
+  },
+  {
+   "magnitude": 5.5,
+   "distance_km": 10,
+   "pga_g": 0.1216,
+   "mmi": 5.42
+  },
+  {
+   "magnitude": 5.5,
+   "distance_km": 25,
+   "pga_g": 0.0629,
+   "mmi": 4.56
+  },
+  {
+   "magnitude": 5.5,
+   "distance_km": 50,
+   "pga_g": 0.0289,
+   "mmi": 3.71
+  },
+  {
+   "magnitude": 5.5,
+   "distance_km": 100,
+   "pga_g": 0.0113,
+   "mmi": 2.35
+  },
+  {
+   "magnitude": 5.5,
+   "distance_km": 150,
+   "pga_g": 0.006,
+   "mmi": 1.9
+  },
+  {
+   "magnitude": 6.0,
+   "distance_km": 5,
+   "pga_g": 0.2259,
+   "mmi": 6.36
+  },
+  {
+   "magnitude": 6.0,
+   "distance_km": 10,
+   "pga_g": 0.1861,
+   "mmi": 6.05
+  },
+  {
+   "magnitude": 6.0,
+   "distance_km": 25,
+   "pga_g": 0.0963,
+   "mmi": 5.07
+  },
+  {
+   "magnitude": 6.0,
+   "distance_km": 50,
+   "pga_g": 0.0442,
+   "mmi": 4.15
+  },
+  {
+   "magnitude": 6.0,
+   "distance_km": 100,
+   "pga_g": 0.0173,
+   "mmi": 3.2
+  },
+  {
+   "magnitude": 6.0,
+   "distance_km": 150,
+   "pga_g": 0.0092,
+   "mmi": 2.2
+  },
+  {
+   "magnitude": 6.5,
+   "distance_km": 5,
+   "pga_g": 0.3455,
+   "mmi": 7.02
+  },
+  {
+   "magnitude": 6.5,
+   "distance_km": 10,
+   "pga_g": 0.2846,
+   "mmi": 6.72
+  },
+  {
+   "magnitude": 6.5,
+   "distance_km": 25,
+   "pga_g": 0.1473,
+   "mmi": 5.7
+  },
+  {
+   "magnitude": 6.5,
+   "distance_km": 50,
+   "pga_g": 0.0677,
+   "mmi": 4.64
+  },
+  {
+   "magnitude": 6.5,
+   "distance_km": 100,
+   "pga_g": 0.0264,
+   "mmi": 3.62
+  },
+  {
+   "magnitude": 6.5,
+   "distance_km": 150,
+   "pga_g": 0.014,
+   "mmi": 3.0
+  },
+  {
+   "magnitude": 7.0,
+   "distance_km": 5,
+   "pga_g": 0.5285,
+   "mmi": 7.68
+  },
+  {
+   "magnitude": 7.0,
+   "distance_km": 10,
+   "pga_g": 0.4353,
+   "mmi": 7.38
+  },
+  {
+   "magnitude": 7.0,
+   "distance_km": 25,
+   "pga_g": 0.2253,
+   "mmi": 6.35
+  },
+  {
+   "magnitude": 7.0,
+   "distance_km": 50,
+   "pga_g": 0.1035,
+   "mmi": 5.18
+  },
+  {
+   "magnitude": 7.0,
+   "distance_km": 100,
+   "pga_g": 0.0404,
+   "mmi": 4.04
+  },
+  {
+   "magnitude": 7.0,
+   "distance_km": 150,
+   "pga_g": 0.0214,
+   "mmi": 3.41
+  },
+  {
+   "magnitude": 7.5,
+   "distance_km": 5,
+   "pga_g": 0.8084,
+   "mmi": 8.19
+  },
+  {
+   "magnitude": 7.5,
+   "distance_km": 10,
+   "pga_g": 0.6659,
+   "mmi": 8.02
+  },
+  {
+   "magnitude": 7.5,
+   "distance_km": 25,
+   "pga_g": 0.3446,
+   "mmi": 7.02
+  },
+  {
+   "magnitude": 7.5,
+   "distance_km": 50,
+   "pga_g": 0.1583,
+   "mmi": 5.81
+  },
+  {
+   "magnitude": 7.5,
+   "distance_km": 100,
+   "pga_g": 0.0618,
+   "mmi": 4.54
+  },
+  {
+   "magnitude": 7.5,
+   "distance_km": 150,
+   "pga_g": 0.0328,
+   "mmi": 3.83
+  },
+  {
+   "magnitude": 8.0,
+   "distance_km": 5,
+   "pga_g": 1.2365,
+   "mmi": 8.56
+  },
+  {
+   "magnitude": 8.0,
+   "distance_km": 10,
+   "pga_g": 1.0186,
+   "mmi": 8.39
+  },
+  {
+   "magnitude": 8.0,
+   "distance_km": 25,
+   "pga_g": 0.527,
+   "mmi": 7.68
+  },
+  {
+   "magnitude": 8.0,
+   "distance_km": 50,
+   "pga_g": 0.2422,
+   "mmi": 6.47
+  },
+  {
+   "magnitude": 8.0,
+   "distance_km": 100,
+   "pga_g": 0.0945,
+   "mmi": 5.04
+  },
+  {
+   "magnitude": 8.0,
+   "distance_km": 150,
+   "pga_g": 0.0501,
+   "mmi": 4.29
+  }
+ ],
+ "damage_by_archetype_distance": [
+  {
+   "archetype": "mud_stone",
+   "distance_km": 5,
+   "expected_grade": 4.902,
+   "grade_class": 5,
+   "resilience_score": 2.44,
+   "p_severe_grade45": 0.9871,
+   "probabilities": {
+    "grade1": 0.0014,
+    "grade2": 0.0004,
+    "grade3": 0.0111,
+    "grade4": 0.0686,
+    "grade5": 0.9184
+   },
+   "flags": []
+  },
+  {
+   "archetype": "mud_stone",
+   "distance_km": 10,
+   "expected_grade": 4.895,
+   "grade_class": 5,
+   "resilience_score": 2.62,
+   "p_severe_grade45": 0.9821,
+   "probabilities": {
+    "grade1": 0.0014,
+    "grade2": 0.0004,
+    "grade3": 0.016,
+    "grade4": 0.0659,
+    "grade5": 0.9162
+   },
+   "flags": []
+  },
+  {
+   "archetype": "mud_stone",
+   "distance_km": 25,
+   "expected_grade": 4.09,
+   "grade_class": 4,
+   "resilience_score": 22.74,
+   "p_severe_grade45": 0.727,
+   "probabilities": {
+    "grade1": 0.0071,
+    "grade2": 0.0351,
+    "grade3": 0.2308,
+    "grade4": 0.3142,
+    "grade5": 0.4127
+   },
+   "flags": []
+  },
+  {
+   "archetype": "mud_stone",
+   "distance_km": 50,
+   "expected_grade": 4.079,
+   "grade_class": 4,
+   "resilience_score": 23.03,
+   "p_severe_grade45": 0.727,
+   "probabilities": {
+    "grade1": 0.0083,
+    "grade2": 0.0339,
+    "grade3": 0.2308,
+    "grade4": 0.3246,
+    "grade5": 0.4024
+   },
+   "flags": []
+  },
+  {
+   "archetype": "mud_stone",
+   "distance_km": 100,
+   "expected_grade": 3.976,
+   "grade_class": 4,
+   "resilience_score": 25.61,
+   "p_severe_grade45": 0.6498,
+   "probabilities": {
+    "grade1": 0.0122,
+    "grade2": 0.0469,
+    "grade3": 0.2912,
+    "grade4": 0.2528,
+    "grade5": 0.397
+   },
+   "flags": []
+  },
+  {
+   "archetype": "mud_stone",
+   "distance_km": 150,
+   "expected_grade": 3.889,
+   "grade_class": 4,
+   "resilience_score": 27.78,
+   "p_severe_grade45": 0.6258,
+   "probabilities": {
+    "grade1": 0.0122,
+    "grade2": 0.0496,
+    "grade3": 0.3124,
+    "grade4": 0.289,
+    "grade5": 0.3368
+   },
+   "flags": []
+  },
+  {
+   "archetype": "brick_cement",
+   "distance_km": 5,
+   "expected_grade": 3.788,
+   "grade_class": 5,
+   "resilience_score": 30.29,
+   "p_severe_grade45": 0.5305,
+   "probabilities": {
+    "grade1": 0.049,
+    "grade2": 0.1686,
+    "grade3": 0.2519,
+    "grade4": 0.0062,
+    "grade5": 0.5243
+   },
+   "flags": []
+  },
+  {
+   "archetype": "brick_cement",
+   "distance_km": 10,
+   "expected_grade": 3.756,
+   "grade_class": 5,
+   "resilience_score": 31.11,
+   "p_severe_grade45": 0.5146,
+   "probabilities": {
+    "grade1": 0.05,
+    "grade2": 0.1735,
+    "grade3": 0.2619,
+    "grade4": 0.0,
+    "grade5": 0.5146
+   },
+   "flags": [
+    "cumulative probabilities were non-monotone and have been corrected"
+   ]
+  },
+  {
+   "archetype": "brick_cement",
+   "distance_km": 25,
+   "expected_grade": 2.827,
+   "grade_class": 3,
+   "resilience_score": 54.32,
+   "p_severe_grade45": 0.2122,
+   "probabilities": {
+    "grade1": 0.1395,
+    "grade2": 0.2623,
+    "grade3": 0.3859,
+    "grade4": 0.056,
+    "grade5": 0.1563
+   },
+   "flags": []
+  },
+  {
+   "archetype": "brick_cement",
+   "distance_km": 50,
+   "expected_grade": 2.443,
+   "grade_class": 2,
+   "resilience_score": 63.94,
+   "p_severe_grade45": 0.1557,
+   "probabilities": {
+    "grade1": 0.2782,
+    "grade2": 0.2547,
+    "grade3": 0.3113,
+    "grade4": 0.0576,
+    "grade5": 0.0981
+   },
+   "flags": []
+  },
+  {
+   "archetype": "brick_cement",
+   "distance_km": 100,
+   "expected_grade": 1.809,
+   "grade_class": 1,
+   "resilience_score": 79.78,
+   "p_severe_grade45": 0.0596,
+   "probabilities": {
+    "grade1": 0.5197,
+    "grade2": 0.2708,
+    "grade3": 0.1499,
+    "grade4": 0.0,
+    "grade5": 0.0596
+   },
+   "flags": [
+    "cumulative probabilities were non-monotone and have been corrected"
+   ]
+  },
+  {
+   "archetype": "brick_cement",
+   "distance_km": 150,
+   "expected_grade": 1.76,
+   "grade_class": 1,
+   "resilience_score": 81.01,
+   "p_severe_grade45": 0.0471,
+   "probabilities": {
+    "grade1": 0.5197,
+    "grade2": 0.2788,
+    "grade3": 0.1543,
+    "grade4": 0.0163,
+    "grade5": 0.0309
+   },
+   "flags": []
+  },
+  {
+   "archetype": "timber_bamboo",
+   "distance_km": 5,
+   "expected_grade": 4.119,
+   "grade_class": 5,
+   "resilience_score": 22.03,
+   "p_severe_grade45": 0.6936,
+   "probabilities": {
+    "grade1": 0.0663,
+    "grade2": 0.0358,
+    "grade3": 0.2043,
+    "grade4": 0.1002,
+    "grade5": 0.5935
+   },
+   "flags": []
+  },
+  {
+   "archetype": "timber_bamboo",
+   "distance_km": 10,
+   "expected_grade": 4.097,
+   "grade_class": 5,
+   "resilience_score": 22.57,
+   "p_severe_grade45": 0.6758,
+   "probabilities": {
+    "grade1": 0.0663,
+    "grade2": 0.0395,
+    "grade3": 0.2184,
+    "grade4": 0.0823,
+    "grade5": 0.5935
+   },
+   "flags": []
+  },
+  {
+   "archetype": "timber_bamboo",
+   "distance_km": 25,
+   "expected_grade": 3.352,
+   "grade_class": 3,
+   "resilience_score": 41.19,
+   "p_severe_grade45": 0.3558,
+   "probabilities": {
+    "grade1": 0.0748,
+    "grade2": 0.136,
+    "grade3": 0.4335,
+    "grade4": 0.0738,
+    "grade5": 0.2819
+   },
+   "flags": []
+  },
+  {
+   "archetype": "timber_bamboo",
+   "distance_km": 50,
+   "expected_grade": 2.975,
+   "grade_class": 3,
+   "resilience_score": 50.64,
+   "p_severe_grade45": 0.228,
+   "probabilities": {
+    "grade1": 0.1051,
+    "grade2": 0.1753,
+    "grade3": 0.4916,
+    "grade4": 0.096,
+    "grade5": 0.132
+   },
+   "flags": []
+  },
+  {
+   "archetype": "timber_bamboo",
+   "distance_km": 100,
+   "expected_grade": 2.232,
+   "grade_class": 2,
+   "resilience_score": 69.2,
+   "p_severe_grade45": 0.1057,
+   "probabilities": {
+    "grade1": 0.2749,
+    "grade2": 0.372,
+    "grade3": 0.2474,
+    "grade4": 0.0576,
+    "grade5": 0.0481
+   },
+   "flags": []
+  },
+  {
+   "archetype": "timber_bamboo",
+   "distance_km": 150,
+   "expected_grade": 2.134,
+   "grade_class": 2,
+   "resilience_score": 71.64,
+   "p_severe_grade45": 0.0709,
+   "probabilities": {
+    "grade1": 0.2749,
+    "grade2": 0.4181,
+    "grade3": 0.236,
+    "grade4": 0.0397,
+    "grade5": 0.0313
+   },
+   "flags": []
+  },
+  {
+   "archetype": "engineered_rc",
+   "distance_km": 5,
+   "expected_grade": 2.822,
+   "grade_class": 3,
+   "resilience_score": 54.46,
+   "p_severe_grade45": 0.3604,
+   "probabilities": {
+    "grade1": 0.1822,
+    "grade2": 0.2914,
+    "grade3": 0.166,
+    "grade4": 0.2433,
+    "grade5": 0.1171
+   },
+   "flags": []
+  },
+  {
+   "archetype": "engineered_rc",
+   "distance_km": 10,
+   "expected_grade": 2.802,
+   "grade_class": 3,
+   "resilience_score": 54.96,
+   "p_severe_grade45": 0.3604,
+   "probabilities": {
+    "grade1": 0.1822,
+    "grade2": 0.3114,
+    "grade3": 0.146,
+    "grade4": 0.2433,
+    "grade5": 0.1171
+   },
+   "flags": []
+  },
+  {
+   "archetype": "engineered_rc",
+   "distance_km": 25,
+   "expected_grade": 2.06,
+   "grade_class": 2,
+   "resilience_score": 73.51,
+   "p_severe_grade45": 0.1122,
+   "probabilities": {
+    "grade1": 0.2889,
+    "grade2": 0.4966,
+    "grade3": 0.1024,
+    "grade4": 0.0904,
+    "grade5": 0.0217
+   },
+   "flags": []
+  },
+  {
+   "archetype": "engineered_rc",
+   "distance_km": 50,
+   "expected_grade": 1.375,
+   "grade_class": 1,
+   "resilience_score": 90.63,
+   "p_severe_grade45": 0.0198,
+   "probabilities": {
+    "grade1": 0.7187,
+    "grade2": 0.2246,
+    "grade3": 0.0369,
+    "grade4": 0.0027,
+    "grade5": 0.0171
+   },
+   "flags": []
+  },
+  {
+   "archetype": "engineered_rc",
+   "distance_km": 100,
+   "expected_grade": 1.277,
+   "grade_class": 1,
+   "resilience_score": 93.07,
+   "p_severe_grade45": 0.0166,
+   "probabilities": {
+    "grade1": 0.7961,
+    "grade2": 0.1633,
+    "grade3": 0.024,
+    "grade4": 0.0007,
+    "grade5": 0.016
+   },
+   "flags": []
+  },
+  {
+   "archetype": "engineered_rc",
+   "distance_km": 150,
+   "expected_grade": 1.263,
+   "grade_class": 1,
+   "resilience_score": 93.43,
+   "p_severe_grade45": 0.0157,
+   "probabilities": {
+    "grade1": 0.7986,
+    "grade2": 0.1679,
+    "grade3": 0.0178,
+    "grade4": 0.0038,
+    "grade5": 0.0119
+   },
+   "flags": []
+  }
+ ],
+ "model_facts": {
+  "model_version": "damage-v3m-monotone",
+  "features": 54,
+  "trained_on_rows": 533465,
+  "survey_rows": 762094,
+  "split": [
+   533465,
+   76210,
+   152419
+  ],
+  "same_district": {
+   "accuracy": 0.4579,
+   "mae": 0.7118,
+   "adjacent_accuracy": 0.8654,
+   "qwk": 0.65
+  },
+  "grouped_cv": {
+   "monotone": {
+    "accuracy": 0.3331,
+    "mae": 0.9335,
+    "qwk": 0.4802,
+    "adjacent_accuracy": 0.7935
+   },
+   "unconstrained": {
+    "accuracy": 0.2902,
+    "mae": 1.0244,
+    "qwk": 0.3923,
+    "adjacent_accuracy": 0.7608
+   }
+  },
+  "dataset": "Nepal 2015 Building Structure Survey, 11 districts"
+ }
+}

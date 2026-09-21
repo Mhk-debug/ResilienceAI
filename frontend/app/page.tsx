@@ -1,60 +1,61 @@
-"use client";
+import type { Metadata } from "next";
+import { Suspense } from "react";
 
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
-import { useAuth } from "@/lib/auth-context";
-import { BASE_API_URL } from "@/utils/constants";
+import Hero from "@/components/landing/Hero";
+import Descent from "@/components/landing/Descent";
+import ShakeLab from "@/components/landing/ShakeLab";
+import {
+  Evidence,
+  Finale,
+  HowItWorks,
+  LandingFooter,
+  MyanmarSection,
+} from "@/components/landing/Sections";
+import { META } from "@/lib/landing/content";
+import ResumeRedirect from "./resume-redirect";
 
-export default function Home() {
-    const router = useRouter();
-    const { user, isAuthenticated, isLoading } = useAuth();
+export const metadata: Metadata = {
+  title: META.title,
+  description: META.description,
+};
 
-    useEffect(() => {
-        if (isLoading) return; // wait for auth check
+/**
+ * `/` — the public landing page, for signed-in and anonymous visitors alike.
+ *
+ * The pre-existing behaviour (jump to the latest assessment, else the form) is preserved verbatim
+ * behind `/?resume=1`, so demo links and bookmarks behave exactly as before.
+ */
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ resume?: string }>;
+}) {
+  const params = await searchParams;
 
-        if (isAuthenticated && user) {
-            // Tier 1: logged-in user → fetch latest from API
-            fetch(`${BASE_API_URL}/assessment?limit=1`, { credentials: "include" })
-                .then((res) => (res.ok ? res.json() : Promise.reject()))
-                .then((assessments) => {
-                    if (Array.isArray(assessments) && assessments.length > 0) {
-                        router.replace(`/dashboard/${assessments[0].id}`);
-                    } else {
-                        router.replace("/form");
-                    }
-                })
-                .catch(() => {
-                    router.replace("/form");
-                });
-        } else {
-            // Tier 2: anonymous → fall back to localStorage
-            try {
-                const latestAssessment = localStorage.getItem("latestAssessmentId");
-                if (latestAssessment) {
-                    router.replace(`/dashboard/${latestAssessment}`);
-                } else {
-                    router.replace("/form");
-                }
-            } catch {
-                router.replace("/form");
-            }
-        }
-    }, [router, user, isAuthenticated, isLoading]);
-
+  if (params?.resume === "1") {
     return (
-        <div className="flex min-h-screen items-center justify-center bg-background">
-            <div className="flex flex-col items-center gap-5 rounded-xl border bg-card p-8 text-center shadow-sm">
-                <div className="h-10 w-10 animate-spin rounded-full border-4 border-muted border-t-orange-500" />
-
-                <div>
-                    <h1 className="text-lg font-semibold text-foreground">
-                        Loading Assessment
-                    </h1>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                        Preparing your resilience dashboard...
-                    </p>
-                </div>
-            </div>
-        </div>
+      <Suspense
+        fallback={
+          <main className="mx-auto flex min-h-[60vh] max-w-3xl items-center px-6">
+            <p className="text-sm text-slate-500">Restoring your last assessment…</p>
+          </main>
+        }
+      >
+        <ResumeRedirect />
+      </Suspense>
     );
+  }
+
+  return (
+    <main className="landing l-grain flex-1">
+      <Hero />
+      <Descent />
+      <ShakeLab />
+      <Evidence />
+      <MyanmarSection />
+      <HowItWorks />
+      <Finale />
+      <LandingFooter />
+    </main>
+  );
 }
