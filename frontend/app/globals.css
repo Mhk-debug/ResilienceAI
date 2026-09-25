@@ -149,3 +149,349 @@ input[type="number"] {
   -moz-appearance: textfield; /* Firefox */
   appearance: textfield;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+   Landing page (/)
+   Scoped entirely under `.landing` so the app's own pages (form, dashboard, assessments) are
+   untouched: this file adds tokens, it does not change any shared one.
+
+   Motion rules: only transform/opacity are animated; every reveal has a static, legible
+   reduced-motion form; parallax transforms are written by the rAF director in
+   components/landing/motion.ts, never by scroll listeners in components.
+   ══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+.landing {
+  /* Light journey: night city → strata → paper → slate */
+  --l-ink: #0b1524;
+  --l-ink-2: #101d31;
+  --l-navy: hsl(224 58% 18%);
+  --l-slate: #121a24;
+  --l-paper: #f5f2ec;
+  --l-paper-2: #e9e3d8;
+  --l-text: #151a20;
+  --l-haze: #7fb3e8;
+
+  /* Strata ramp (the descent) */
+  --l-strata-1: #2a2118;
+  --l-strata-2: #4a3a28;
+  --l-strata-3: #6b5540;
+
+  /* The app's own risk ramp — the only saturated colour on the page */
+  --l-risk-1: #10b981;
+  --l-risk-2: #84cc16;
+  --l-risk-3: #f59e0b;
+  --l-risk-4: #f97316;
+  --l-risk-5: #ef4444;
+
+  --l-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  background: var(--l-ink);
+  color: #eef2f7;
+  font-family: var(--font-geist-sans);
+  /* the app body is monospace; the landing opts out for reading copy */
+  -webkit-font-smoothing: antialiased;
+}
+
+.landing ::selection {
+  background: var(--l-haze);
+  color: var(--l-ink);
+}
+
+.landing .l-mono {
+  font-family: var(--font-geist-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Scenery ─────────────────────────────────────────────────────────────────────────────── */
+
+.landing .l-grain::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 60;
+  opacity: 0.045;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E");
+}
+
+.landing .l-vignette::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(120% 80% at 50% 0%, transparent 40%, rgba(3, 7, 18, 0.55) 100%);
+}
+
+.landing [data-parallax] {
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
+}
+
+/* The header floats over this page, so anchor jumps and scroll-into-view must clear it or the
+   section's first line lands underneath the bar. */
+.landing section[id] {
+  scroll-margin-top: 5.5rem;
+}
+
+/* ── Reveals ─────────────────────────────────────────────────────────────────────────────── */
+
+/* Only armed once JS is running (see `.js-motion` in motion.ts). Without JS the page renders in
+   full, so a hydration failure can never leave the sections below the hero blank.
+   `:where()` keeps this guard at zero specificity — otherwise it outranks the rules that reveal the
+   element again and the whole page stays invisible with JS on. */
+:where(html.js-motion) .landing .reveal {
+  opacity: 0;
+  transform: translate3d(0, 18px, 0);
+  transition: opacity 0.75s var(--l-ease), transform 0.75s var(--l-ease);
+  transition-delay: var(--d, 0ms);
+}
+
+.landing .reveal.is-in {
+  opacity: 1;
+  transform: none;
+}
+
+/* A section observes its own wrapper and reveals every descendant `.reveal` inside it, so one
+   observer per section covers a staggered group. */
+.landing .is-in .reveal {
+  opacity: 1;
+  transform: none;
+}
+
+.landing .reveal-line {
+  display: block;
+  overflow: hidden;
+}
+
+:where(html.js-motion) .landing .reveal-line > span {
+  display: block;
+  transform: translate3d(0, 105%, 0);
+  transition: transform 0.9s var(--l-ease);
+  transition-delay: var(--d, 0ms);
+}
+
+.landing .reveal-line > span {
+  display: block;
+}
+
+.landing .is-in .reveal-line > span,
+.landing .reveal-line.is-in > span {
+  transform: none;
+}
+
+/* ── The seismograph trace draws itself once ─────────────────────────────────────────────── */
+
+.landing .l-trace path {
+  stroke-dasharray: var(--trace-len, 1200);
+  stroke-dashoffset: var(--trace-len, 1200);
+}
+
+.landing .l-trace.is-in path {
+  animation: l-trace-draw 2.6s var(--l-ease) forwards;
+}
+
+@keyframes l-trace-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ── Ambient drift (scenery only) ────────────────────────────────────────────────────────── */
+
+@keyframes l-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -10px, 0);
+  }
+}
+
+.landing .l-drift {
+  animation: l-drift 9s ease-in-out infinite;
+}
+
+@keyframes l-strata-settle {
+  from {
+    transform: translate3d(0, -12px, 0);
+    opacity: 0.4;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* ── The descent: pinned by scroll, static by default ─────────────────────────────────────── */
+
+/* Base state is a plain, legible list, so no-JS and reduced-motion visitors get every horizon.
+   Only when JS is running AND motion is welcome does it become a pinned stage. */
+.landing .l-descent-scroller {
+  position: relative;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :where(html.js-motion) .landing .l-descent-scroller {
+    height: 460vh;
+  }
+
+  :where(html.js-motion) .landing .l-descent-panel {
+    position: sticky;
+    top: 0;
+    display: flex;
+    height: 100svh;
+    align-items: center;
+  }
+
+  /* Grid stacking: every horizon occupies the same cell, so the stage keeps the height of the
+     tallest card and nothing collapses. Absolute positioning would collapse it to zero. */
+  :where(html.js-motion) .landing .l-descent-list {
+    display: grid;
+    grid-template-areas: "stack";
+    margin-top: 0;
+  }
+
+  :where(html.js-motion) .landing .l-descent-list > .l-horizon {
+    grid-area: stack;
+    margin-top: 0;
+    opacity: 0;
+    transform: translate3d(0, 26px, 0);
+    transition: opacity 0.5s var(--l-ease), transform 0.5s var(--l-ease);
+    pointer-events: none;
+  }
+
+  :where(html.js-motion) .landing .l-descent-list > .l-horizon.is-active {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+
+  :where(html.js-motion) .landing .l-descent-ruler {
+    position: sticky;
+    top: 50vh;
+  }
+}
+
+/* ── Shake lab controls and readouts ─────────────────────────────────────────────────────── */
+
+.landing .l-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  cursor: pointer;
+}
+
+.landing .l-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--l-haze);
+  border: 2px solid var(--l-ink);
+}
+
+.landing .l-range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--l-haze);
+  border: 2px solid var(--l-ink);
+}
+
+.landing .l-range:focus-visible {
+  outline: 2px solid var(--l-haze);
+  outline-offset: 4px;
+}
+
+.landing .l-mmi {
+  background: linear-gradient(
+    90deg,
+    var(--l-risk-1) 0%,
+    var(--l-risk-2) 32%,
+    var(--l-risk-3) 58%,
+    var(--l-risk-4) 78%,
+    var(--l-risk-5) 100%
+  );
+}
+
+.landing .l-mmi-marker {
+  transition: left 0.4s var(--l-ease);
+}
+
+.landing .l-grade-seg {
+  /* width is animated deliberately: five elements, only on discrete user input — never per frame */
+  transition: width 0.45s var(--l-ease);
+}
+
+/* ── The building figure ─────────────────────────────────────────────────────────────────── */
+
+/* A slow sway so the drawing reads as a building standing on moving ground. Transform only, one
+   element, and it stops entirely when the visitor pauses it or asks for reduced motion. */
+@keyframes l-sway {
+  0%,
+  100% {
+    transform: translateX(-0.6px) rotate(-0.12deg);
+  }
+  50% {
+    transform: translateX(0.6px) rotate(0.12deg);
+  }
+}
+
+.landing .l-building-svg .l-building-mass {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: l-sway 7.5s ease-in-out infinite;
+}
+
+.landing .l-paused .l-building-svg .l-building-mass {
+  animation-play-state: paused;
+}
+
+/* ── Reduced motion: everything is static, nothing is hidden ─────────────────────────────── */
+
+/* Printing (and PDF export) must never inherit a transient animation state. */
+@media print {
+  .landing .reveal,
+  .landing .reveal-line > span {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing .reveal,
+  .landing .reveal-line > span {
+    opacity: 1;
+    transform: none;
+    transition: none;
+    animation: none;
+  }
+
+  .landing .l-trace path {
+    stroke-dashoffset: 0;
+    animation: none;
+  }
+
+  .landing .l-drift,
+  .landing .l-trace.is-in path {
+    animation: none;
+  }
+
+  .landing .l-mmi-marker,
+  .landing .l-grade-seg,
+  .landing .l-horizon {
+    transition: none;
+  }
+
+  .landing .l-building-svg .l-building-mass {
+    animation: none;
+  }
+
+  .landing [data-parallax] {
+    transform: none !important;
+  }
+}

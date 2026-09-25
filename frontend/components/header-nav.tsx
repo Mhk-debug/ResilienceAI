@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
+import { useScrolled } from "@/components/landing/motion";
 import ProfileButton from "./profile-button";
 
 const NAV_LINKS = [
@@ -17,11 +18,24 @@ function HeaderNav() {
     const { isAuthenticated, isLoading } = useAuth();
     const pathname = usePathname();
 
+    // On the landing page the header floats over the hero and solidifies on scroll; everywhere else
+    // it stays the solid app bar it has always been. The hook only subscribes on `/`.
+    const isLanding = pathname === "/";
+    const scrolled = useScrolled(80, isLanding);
+
     const isActive = (href: string) =>
         href === "/" ? pathname === href : pathname.startsWith(href);
 
+    const headerClassName = isLanding
+        ? `fixed inset-x-0 top-0 z-50 px-6 py-4 md:px-10 md:py-5 transition-colors duration-300 ${
+              scrolled
+                  ? "border-b border-white/10 bg-[hsl(224_58%_18%)]/85 shadow-lg backdrop-blur-md"
+                  : "border-b border-transparent bg-transparent"
+          }`
+        : "relative border-b border-primary-foreground/10 bg-[hsl(224_58%_18%)] px-6 py-4 md:px-10 md:py-5 shadow-lg";
+
     return (
-        <header className="relative border-b border-primary-foreground/10 bg-[hsl(224_58%_18%)] px-6 py-4 md:px-10 md:py-5 shadow-lg">
+        <header className={headerClassName}>
             {/* Absolutely-centered nav — its center is the header's center,
                 independent of how wide the brand / auth sides are. */}
             <nav
