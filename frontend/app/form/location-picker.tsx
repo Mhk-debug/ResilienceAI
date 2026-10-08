@@ -18,8 +18,11 @@ const DEFAULT_LAT = 37.7749;
 const DEFAULT_LNG = -122.4194;
 const DEFAULT_ZOOM = 12;
 
-const TILE_LAYER_URL =
-    "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+const CARTO_API_KEY =
+    process.env.NEXT_PUBLIC_CARTO_API_KEY ||
+    "cb1_4dzu_1_9279281612b96cd4ccfaf483";
+
+const TILE_LAYER_URL = `https://basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}{r}.png?key=${CARTO_API_KEY}`;
 const TILE_LAYER_ATTRIBUTION =
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
@@ -111,7 +114,6 @@ export default function LocationPicker({
         leaflet
             .tileLayer(TILE_LAYER_URL, {
                 attribution: TILE_LAYER_ATTRIBUTION,
-                subdomains: "abcd",
                 maxZoom: 20,
                 minZoom: 3,
             })

@@ -71,7 +71,6 @@ GEMINI_API_KEY=your-gemini-api-key
 | `SMTP_PASS` | `""` | **Yes\*** | SMTP password |
 | `SMTP_FROM` | `"noreply@resilienceai.app"` | — | SMTP sender address |
 | `FRONTEND_URL` | `"http://localhost:3000"` | — | Frontend URL for email links |
-| `JWT_SECRET` | `"super-secret-key"` | — | JWT secret for Next.js middleware |
 | `NEXT_PUBLIC_API_URL` | `"http://127.0.0.1:8000"` | — | Backend URL for frontend SSE proxy |
 
 > **\*** `SMTP_HOST`, `SMTP_USER`, and `SMTP_PASS` are required in production if you need email functionality (verification, password reset, etc.). Without them, the email service falls back to console logging.
