@@ -28,4 +28,4 @@ The `User` model (`backend/database/models.py`) stores user credentials:
 
 ## Frontend
 - `frontend/lib/auth-context.tsx`: Provides React auth state.
-- `frontend/middleware.ts`: Protects `/dashboard` and `/form` routes via cookie validation.
+- `frontend/middleware.ts`: Presence + expiry gate on `/dashboard`, `/form`, and `/assessments` (redirects to `/login` when the `access_token` cookie is missing or expired). JWT signature verification happens on the backend via `get_current_user_from_cookie()` on every API call.

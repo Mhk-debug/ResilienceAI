@@ -30,14 +30,18 @@ try:
     engine = create_engine(
         DATABASE_URL,
         pool_pre_ping=True,
-        pool_recycle=300,
+        # Neon kills idle server-side connections aggressively; a request can
+        # hold a pooled connection for 30-60s while SoilGrids/USGS/LLM calls
+        # run. Recycle well under that window so a stale socket is never
+        # handed out, and fail fast on connect rather than hanging the save.
+        pool_recycle=60,
         pool_size=5,
         max_overflow=10,
         future=True,
         echo=False,
         # No hardcoded sslmode: psycopg defaults to "prefer", which works with
         # both local Postgres (no SSL) and remote URLs that carry ?sslmode=require.
-        connect_args={}
+        connect_args={"connect_timeout": 10},
     )
 
 except SQLAlchemyError:

@@ -6,7 +6,7 @@ import traceback
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.orm import Session
 from typing import List
 from pydantic import BaseModel
@@ -138,9 +138,24 @@ async def save_assessment(
             llm=llm,
         )
 
-        db.add(assessment)
-        db.commit()
-        db.refresh(assessment)
+        # Neon (serverless Postgres) drops connections that sit idle while the
+        # SSE stream waits on SoilGrids/USGS/LLM calls. pool_pre_ping only
+        # validates at checkout, so a connection that dies mid-request fails
+        # here on commit. Retry once on a fresh connection: transient drops
+        # heal, persistent outages still 500 correctly below.
+        try:
+            db.add(assessment)
+            db.commit()
+            db.refresh(assessment)
+        except OperationalError:
+            logger.warning(
+                "Save commit hit a dropped DB connection; retrying once on a "
+                "fresh connection."
+            )
+            db.rollback()
+            db.add(assessment)
+            db.commit()
+            db.refresh(assessment)
 
         logger.info("Assessment %s successfully persisted.", assessment.id)
 
