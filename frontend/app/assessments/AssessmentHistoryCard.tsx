@@ -1,5 +1,13 @@
 import Link from "next/link";
-import { Calendar, MapPin, ShieldCheck, AlertTriangle, ArrowUpRight } from "lucide-react";
+import {
+    Calendar,
+    MapPin,
+    ShieldCheck,
+    AlertTriangle,
+    ArrowUpRight,
+    Trash2,
+    Loader2,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatTimeAgo } from "@/utils/tools";
@@ -22,6 +30,10 @@ export interface AssessmentSummary {
 
 interface AssessmentHistoryCardProps {
     assessment: AssessmentSummary;
+    /** Opens the shared delete-confirmation dialog in the parent page. */
+    onRequestDelete?: (assessment: AssessmentSummary) => void;
+    /** True while this specific assessment's deletion is in flight. */
+    isDeleting?: boolean;
 }
 
 /**
@@ -47,7 +59,11 @@ function hazardBadgeVariant(
     return "default";
 }
 
-function AssessmentHistoryCard({ assessment }: AssessmentHistoryCardProps) {
+function AssessmentHistoryCard({
+    assessment,
+    onRequestDelete,
+    isDeleting = false,
+}: AssessmentHistoryCardProps) {
     const riskScore = calculateRiskScore(
         assessment.hazard_score,
         null,
@@ -62,15 +78,34 @@ function AssessmentHistoryCard({ assessment }: AssessmentHistoryCardProps) {
 
     return (
         <article className="group flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md">
-            {/* Top row: timestamp + hazard badge */}
+            {/* Top row: timestamp + hazard badge + delete */}
             <div className="mb-3 flex items-center justify-between gap-2">
                 <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
                     <Calendar className="h-3.5 w-3.5 text-slate-400" />
                     {formatTimeAgo(new Date(assessment.created_at))}
                 </span>
-                <Badge variant={hazardBadgeVariant(assessment.hazard_level)}>
-                    {assessment.hazard_level}
-                </Badge>
+                <span className="flex shrink-0 items-center gap-1.5">
+                    <Badge variant={hazardBadgeVariant(assessment.hazard_level)}>
+                        {assessment.hazard_level}
+                    </Badge>
+                    {onRequestDelete && (
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 shrink-0 p-0 text-slate-400 hover:bg-rose-50 hover:text-rose-600 focus-visible:border-rose-400 focus-visible:ring-rose-200"
+                            aria-label={`Delete assessment for ${locationLabel}`}
+                            disabled={isDeleting}
+                            onClick={() => onRequestDelete(assessment)}
+                        >
+                            {isDeleting ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                                <Trash2 className="h-3.5 w-3.5" />
+                            )}
+                        </Button>
+                    )}
+                </span>
             </div>
 
             {/* Location */}

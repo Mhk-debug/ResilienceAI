@@ -639,6 +639,31 @@ Fetch a saved assessment by UUID.
 
 ---
 
+### 7. Delete Assessment
+
+#### `DELETE /api/assessment/{assessment_id}`
+
+Permanently delete a saved assessment owned by the authenticated user. There is no undo.
+
+**Tags:** `Orchestration`, `Database`
+
+**Path Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `assessment_id` | UUID | Assessment identifier |
+
+**Responses:**
+| Status | Body | Meaning |
+|--------|------|---------|
+| `204` | *(empty)* | Assessment deleted |
+| `401` | `{"detail": "Not authenticated"}` | Missing or expired session cookie |
+| `403` | `{"detail": "You do not have permission to delete this assessment."}` | Assessment belongs to another user |
+| `404` | `{"detail": "Assessment with ID ... not found."}` | No assessment with that ID |
+| `422` | FastAPI validation error | `assessment_id` is not a valid UUID |
+| `500` | `{"detail": "An internal database error occurred while deleting the assessment."}` | Database error during deletion (rolled back) |
+
+---
+
 ## Data Models Reference
 
 ### BuildingInput
@@ -728,6 +753,7 @@ Combines `BuildingInput` + `HazardInput` (latitude, longitude).
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.3.0 | 2026-10-09 | Added `DELETE /api/assessment/{assessment_id}` |
 | 1.2.0 | 2026-07-26 | Added SSE streaming, evidence citations, Neon PG |
 | 1.1.0 | 2026-07-15 | Hazard engine v1.1, RAG retrieval |
 | 1.0.0 | 2026-06-29 | Initial ML + hazard + basic LLM |

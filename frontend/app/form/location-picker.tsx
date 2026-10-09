@@ -14,8 +14,10 @@ interface LocationPickerProps {
 }
 
 // --- Constants & Templates ---
-const DEFAULT_LAT = 37.7749;
-const DEFAULT_LNG = -122.4194;
+// Fallback map position when the form provides no coordinates: Sagaing town,
+// Myanmar — on the Sagaing Fault (matches DEFAULT_FORM_VALUES in ./data.ts).
+const DEFAULT_LAT = 21.97;
+const DEFAULT_LNG = 95.986;
 const DEFAULT_ZOOM = 12;
 
 const CARTO_API_KEY =
@@ -25,6 +27,16 @@ const CARTO_API_KEY =
 const TILE_LAYER_URL = `https://basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}{r}.png?key=${CARTO_API_KEY}`;
 const TILE_LAYER_ATTRIBUTION =
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+
+// Emergency fallback basemap: OSM's own tile servers, swapped in when the
+// CARTO CDN is unreachable from the user's network (some regional networks
+// block map CDNs, which otherwise leaves a blank grey box).
+const OSM_TILE_LAYER_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const OSM_TILE_LAYER_ATTRIBUTION =
+    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+// One viewport is roughly 12-20 tiles; six consecutive errors means the
+// provider is unreachable, not a transient blip.
+const TILE_FALLBACK_THRESHOLD = 6;
 
 const CUSTOM_PIN_HTML = `
     <div class="relative flex items-center justify-center">
@@ -46,6 +58,7 @@ export default function LocationPicker({
 }: LocationPickerProps) {
     // State
     const [leaflet, setLeaflet] = useState<typeof L | null>(null);
+    const [mapError, setMapError] = useState<string | null>(null);
     const [addressName, setAddressName] = useState<string>(
         "Locating position...",
     );
@@ -59,9 +72,20 @@ export default function LocationPicker({
     // 1. Load Leaflet Dynamically (SSR Safe)
     useEffect(() => {
         let isMounted = true;
-        import("leaflet").then((L) => {
-            if (isMounted) setLeaflet(L);
-        });
+        import("leaflet")
+            .then((L) => {
+                if (isMounted) setLeaflet(L);
+            })
+            .catch((err) => {
+                // Surface the failure instead of showing "Loading map assets..."
+                // forever (the previous behaviour when the chunk failed to load).
+                console.error("Failed to load the Leaflet library:", err);
+                if (isMounted) {
+                    setMapError(
+                        "The map library failed to load. Check your connection and reload the page — you can still enter coordinates manually."
+                    );
+                }
+            });
         return () => {
             isMounted = false;
         };
@@ -106,18 +130,52 @@ export default function LocationPicker({
         const initialLat = normalizeLatitude(latitude || DEFAULT_LAT);
         const initialLng = normalizeLongitude(longitude || DEFAULT_LNG);
 
-        // Configure Map
-        const map = leaflet
-            .map(mapContainerRef.current, { zoomControl: false })
-            .setView([initialLat, initialLng], DEFAULT_ZOOM);
+        // Configure Map — a throw here (e.g. a browser extension breaking the
+        // container) used to crash the effect silently; surface it instead.
+        const map = ((): L.Map | null => {
+            try {
+                return leaflet
+                    .map(mapContainerRef.current!, { zoomControl: false })
+                    .setView([initialLat, initialLng], DEFAULT_ZOOM);
+            } catch (err) {
+                console.error("Failed to initialise the Leaflet map:", err);
+                setMapError(
+                    "The interactive map could not start on this device. You can still enter the coordinates manually."
+                );
+                return null;
+            }
+        })();
 
-        leaflet
+        if (!map) return;
+
+        // Primary basemap (CARTO Positron). If its CDN is unreachable on the
+        // user's network, tile errors accumulate and we swap to OSM's own tile
+        // servers rather than leaving a blank grey box.
+        let tileFailures = 0;
+        let usingFallbackTiles = false;
+        let activeTileLayer: L.TileLayer = leaflet
             .tileLayer(TILE_LAYER_URL, {
                 attribution: TILE_LAYER_ATTRIBUTION,
                 maxZoom: 20,
                 minZoom: 3,
             })
             .addTo(map);
+
+        activeTileLayer.on("tileerror", () => {
+            if (usingFallbackTiles) return;
+            tileFailures += 1;
+            if (tileFailures >= TILE_FALLBACK_THRESHOLD) {
+                usingFallbackTiles = true;
+                map.removeLayer(activeTileLayer);
+                activeTileLayer = leaflet
+                    .tileLayer(OSM_TILE_LAYER_URL, {
+                        attribution: OSM_TILE_LAYER_ATTRIBUTION,
+                        maxZoom: 19,
+                        minZoom: 3,
+                    })
+                    .addTo(map);
+            }
+        });
 
         leaflet.control.zoom({ position: "bottomright" }).addTo(map);
 
@@ -188,14 +246,11 @@ export default function LocationPicker({
     }, [leaflet, reverseGeocode]); // Intentionally omitting latitude/longitude to prevent re-initialization
 
     // --- Render ---
-    if (!leaflet) {
-        return (
-            <div className="h-70 md:h-85 flex items-center justify-center border border-slate-200 rounded-xl bg-slate-50 text-sm text-slate-400 font-medium">
-                Loading map assets...
-            </div>
-        );
-    }
-
+    // The map container stays mounted for the component's whole lifetime.
+    // Previously the component returned a "Loading map assets..." placeholder
+    // until the dynamic import resolved, swapping the DOM node the init effect
+    // targets — a race that could leave the map unbuilt in some dev/HMR states.
+    // Loading and failure states are now rendered as an overlay on top.
     return (
         <div className="space-y-3">
             <div className="relative rounded-xl overflow-hidden border border-slate-200 h-70 md:h-85 shadow-sm bg-white">
@@ -204,6 +259,11 @@ export default function LocationPicker({
                     className="w-full h-full z-50"
                     id="seismic-map-container"
                 />
+                {(!leaflet || mapError) && (
+                    <div className="absolute inset-0 z-1000 flex items-center justify-center bg-slate-50 px-6 text-center text-sm font-medium text-slate-400">
+                        {mapError ?? "Loading map assets..."}
+                    </div>
+                )}
 
                 {/* GIS Site Coordinates Overlay */}
                 <div className="absolute top-3 left-3 z-50 bg-white/95 backdrop-blur-md border border-slate-200 text-[11px] font-mono p-2.5 rounded-lg flex flex-col gap-1 shadow-md text-slate-800 pointer-events-auto">

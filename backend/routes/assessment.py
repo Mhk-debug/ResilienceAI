@@ -592,3 +592,64 @@ def get_assessment_by_id(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal database error occurred while fetching the assessment."
         )
+
+
+@router.delete(
+    "/{assessment_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete an assessment owned by the authenticated user",
+    description=(
+        "Permanently removes the assessment row, including all JSONB payloads. "
+        "Only the owner may delete it: another user's assessment returns 403 and "
+        "an unknown ID returns 404. There is no undo."
+    ),
+)
+def delete_assessment(
+    assessment_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_cookie),
+) -> None:
+    """
+    Permanently delete an assessment owned by the authenticated user.
+
+    Existence and ownership checks mirror GET /assessment/{assessment_id}:
+    unknown IDs raise 404, another user's assessment raises 403.
+
+    Args:
+        assessment_id (uuid.UUID): The unique identifier of the assessment.
+        db (Session): The SQLAlchemy database session.
+        current_user (User): The authenticated user from the session cookie.
+    """
+    try:
+        assessment = db.query(Assessment).filter(Assessment.id == assessment_id).first()
+
+        if assessment is None:
+            logger.warning(f"Assessment delete failed: UUID {assessment_id} not found.")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Assessment with ID {assessment_id} not found.",
+            )
+
+        # Enforce ownership: only the user who created the assessment may delete it
+        if assessment.user_id != current_user.id:
+            logger.warning(
+                f"User {current_user.id} attempted to delete assessment {assessment_id} "
+                f"owned by user {assessment.user_id}."
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to delete this assessment.",
+            )
+
+        db.delete(assessment)
+        db.commit()
+
+        logger.info(f"Assessment {assessment_id} deleted by user {current_user.id}.")
+
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception(f"Database error while deleting assessment {assessment_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An internal database error occurred while deleting the assessment.",
+        )

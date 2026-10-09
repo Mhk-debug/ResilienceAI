@@ -2,10 +2,24 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { History, Plus, RefreshCw, FileSearch } from "lucide-react";
+import {
+    History,
+    Plus,
+    RefreshCw,
+    FileSearch,
+    AlertCircle,
+    Loader2,
+    Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogClose,
+} from "@/components/ui/dialog";
 import { useAuth } from "@/lib/auth-context";
 import { BASE_API_URL } from "@/utils/constants";
 import type { AssessmentSummary } from "./AssessmentHistoryCard";
@@ -22,12 +36,50 @@ interface AssessmentHistoryResponse {
 
 const PAGE_SIZE = 20;
 
+/** Human-readable label for an assessment, matching the card's fallback logic. */
+function locationLabelFor(assessment: AssessmentSummary): string {
+    return (
+        assessment.place_name?.trim() ||
+        `${assessment.latitude.toFixed(3)}, ${assessment.longitude.toFixed(3)}`
+    );
+}
+
+/**
+ * Drop a deleted assessment's ID from the localStorage fast-cache so the
+ * anonymous resume-redirect can't point at a dashboard that no longer exists.
+ * Best-effort only — the API is the source of truth.
+ */
+function clearDeletedFromLocalStorage(id: string) {
+    try {
+        if (window.localStorage.getItem("latestAssessmentId") === id) {
+            window.localStorage.removeItem("latestAssessmentId");
+        }
+        const raw = window.localStorage.getItem("assessmentHistory");
+        if (raw) {
+            const parsed: unknown = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+                window.localStorage.setItem(
+                    "assessmentHistory",
+                    JSON.stringify(parsed.filter((entry) => entry !== id))
+                );
+            }
+        }
+    } catch {
+        // localStorage unavailable or corrupted — nothing to clean up.
+    }
+}
+
 function AssessmentHistoryPage() {
     const { isAuthenticated, isLoading: authLoading } = useAuth();
     const [assessments, setAssessments] = useState<AssessmentSummary[]>([]);
     const [total, setTotal] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [pendingDelete, setPendingDelete] = useState<AssessmentSummary | null>(
+        null
+    );
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
 
     const loadHistory = useCallback(async () => {
         setIsLoading(true);
@@ -68,6 +120,38 @@ function AssessmentHistoryPage() {
             window.clearTimeout(timer);
         };
     }, [authLoading, isAuthenticated, loadHistory]);
+
+    const handleConfirmDelete = async () => {
+        if (!pendingDelete) return;
+        const target = pendingDelete;
+
+        setIsDeleting(true);
+        setDeleteError(null);
+        try {
+            const response = await fetch(
+                `${BASE_API_URL}/assessment/${target.id}`,
+                { method: "DELETE", credentials: "include" }
+            );
+            // 404 = already gone (stale list) — treat as success so the card
+            // disappears instead of erroring forever.
+            if (response.ok || response.status === 404) {
+                setAssessments((prev) => prev.filter((a) => a.id !== target.id));
+                setTotal((prev) => Math.max(0, prev - 1));
+                clearDeletedFromLocalStorage(target.id);
+                setPendingDelete(null);
+            } else {
+                setDeleteError(
+                    "The assessment couldn't be deleted. Please try again."
+                );
+            }
+        } catch {
+            setDeleteError(
+                "Unable to connect to the server. Please check your connection."
+            );
+        } finally {
+            setIsDeleting(false);
+        }
+    };
 
     if (authLoading || isLoading) {
         return <AssessmentHistoryLoading />;
@@ -142,11 +226,77 @@ function AssessmentHistoryPage() {
                     </div>
                     <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
                         {assessments.map((a) => (
-                            <AssessmentHistoryCard key={a.id} assessment={a} />
+                            <AssessmentHistoryCard
+                                key={a.id}
+                                assessment={a}
+                                onRequestDelete={(target) => {
+                                    // Ignore clicks while another deletion is in flight
+                                    // so the dialog target can't switch mid-request.
+                                    if (!isDeleting) {
+                                        setPendingDelete(target);
+                                    }
+                                }}
+                                isDeleting={
+                                    isDeleting && pendingDelete?.id === a.id
+                                }
+                            />
                         ))}
                     </div>
                 </>
             )}
+            <Dialog
+                open={pendingDelete !== null}
+                onOpenChange={(open) => {
+                    if (!open && !isDeleting) {
+                        setPendingDelete(null);
+                        setDeleteError(null);
+                    }
+                }}
+            >
+                <DialogContent title="Delete assessment?">
+                    <DialogDescription>
+                        This will permanently delete the assessment for{" "}
+                        <span className="font-medium text-foreground">
+                            {pendingDelete
+                                ? locationLabelFor(pendingDelete)
+                                : "this location"}
+                        </span>
+                        . This action cannot be undone.
+                    </DialogDescription>
+                    {deleteError && (
+                        <Alert variant="destructive" className="mb-4">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertDescription>{deleteError}</AlertDescription>
+                        </Alert>
+                    )}
+                    <div className="flex justify-end gap-2">
+                        <DialogClose>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={isDeleting}
+                            >
+                                Cancel
+                            </Button>
+                        </DialogClose>
+                        <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            onClick={handleConfirmDelete}
+                            disabled={isDeleting}
+                        >
+                            {isDeleting ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                                <Trash2 className="h-3.5 w-3.5" />
+                            )}
+                            Delete
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

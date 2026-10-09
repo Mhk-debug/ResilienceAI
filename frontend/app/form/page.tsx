@@ -1406,7 +1406,7 @@ export default function FormPage() {
                                         valueAsNumber: true,
                                     })}
                                     className="w-full bg-white border border-slate-200 text-slate-900 placeholder-slate-400 rounded-lg py-2.5 px-3.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 transition-all"
-                                    placeholder="e.g. 37.7749"
+                                    placeholder="e.g. 21.97"
                                     id="input-latitude"
                                 />
                                 {errors.latitude && (
@@ -1427,7 +1427,7 @@ export default function FormPage() {
                                         valueAsNumber: true,
                                     })}
                                     className="w-full bg-white border border-slate-200 text-slate-900 placeholder-slate-400 rounded-lg py-2.5 px-3.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 transition-all"
-                                    placeholder="e.g. -122.4194"
+                                    placeholder="e.g. 95.986"
                                     id="input-longitude"
                                 />
                                 {errors.longitude && (
